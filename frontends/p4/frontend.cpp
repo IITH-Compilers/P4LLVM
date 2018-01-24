@@ -50,6 +50,8 @@ limitations under the License.
 #include "uselessCasts.h"
 #include "validateParsedProgram.h"
 
+#include "emitLLVMIR.h"
+
 namespace P4 {
 
 namespace {
@@ -150,6 +152,9 @@ const IR::P4Program *FrontEnd::run(const CompilerOptions &options, const IR::P4P
         new UniqueParameters(&refMap, &typeMap),
         new SimplifyControlFlow(&refMap, &typeMap),
         new SpecializeAll(&refMap, &typeMap),
+        //
+        new EmitLLVMIR(&refMap, &typeMap),
+        //
         new RemoveParserControlFlow(&refMap, &typeMap),
         new FrontEndLast(),
     };
