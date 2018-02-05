@@ -50,9 +50,20 @@ add_cpplint_files(${CMAKE_CURRENT_SOURCE_DIR} "${P4C_EBPF_SRCS};${P4C_EBPF_HDRS}
 
 set (P4C_EBPF_DIST_HEADERS p4include/ebpf_model.p4)
 
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
 build_unified(P4C_EBPF_SRCS ALL)
 add_executable(p4c-ebpf ${P4C_EBPF_SRCS})
-target_link_libraries (p4c-ebpf ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
+
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+
+target_link_libraries (p4c-ebpf ${llvm_libs} ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
 add_dependencies(p4c-ebpf genIR)
 
 install (TARGETS p4c-ebpf

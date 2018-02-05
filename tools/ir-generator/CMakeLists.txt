@@ -41,6 +41,18 @@ set (IRGENERATOR_GEN_SRCS
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(${IRGENERATOR_GEN_SRCS} PROPERTIES GENERATED TRUE)
 set_source_files_properties(${IRGENERATOR_GEN_SRCS} PROPERTIES OBJECT_DEPENDS ${FLEX_IRgenLexer_OUTPUTS})
+
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
 build_unified(IRGENERATOR_SRCS ALL)
 add_executable (irgenerator ${IRGENERATOR_SRCS} ${IRGENERATOR_GEN_SRCS})
-target_link_libraries (irgenerator p4ctoolkit ${P4C_LIB_DEPS})
+
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+
+target_link_libraries (irgenerator p4ctoolkit ${llvm_libs} ${P4C_LIB_DEPS})

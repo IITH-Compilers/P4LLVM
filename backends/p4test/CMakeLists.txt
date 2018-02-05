@@ -24,9 +24,20 @@ set (P4TEST_HDRS
 
 add_cpplint_files (${CMAKE_CURRENT_SOURCE_DIR} "${P4TEST_SRCS};${P4TEST_HDRS}")
 
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
 build_unified(P4TEST_SRCS ALL)
 add_executable(p4test ${P4TEST_SRCS} ${EXTENSION_P4_14_CONV_SOURCES})
-target_link_libraries (p4test ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
+
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+
+target_link_libraries (p4test ${llvm_libs} ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
 add_dependencies(p4test genIR)
 
 install (TARGETS p4test

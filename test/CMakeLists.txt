@@ -80,8 +80,22 @@ set (GTESTP4C_SOURCES ${GTEST_SOURCES} ${GTEST_BASE_SOURCES})
 # can add GTests to `GTEST_SOURCES` to include them in the test executable. They
 # can also link in additional libraries, if needed, by adding them to
 # `GTEST_LDADD`.
+
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
 add_executable (gtestp4c ${GTESTP4C_SOURCES})
-target_link_libraries (gtestp4c ${GTEST_LDADD} ${P4C_LIBRARIES} gtest ${P4C_LIB_DEPS})
+
+# Find the libraries that correspond to the LLVM components
+# that we wish to use
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+
+target_link_libraries (gtestp4c ${llvm_libs} ${GTEST_LDADD} ${P4C_LIBRARIES} gtest ${P4C_LIB_DEPS})
 
 # Tests
 add_test (NAME gtestp4c COMMAND gtestp4c WORKING_DIRECTORY ${P4C_BINARY_DIR})

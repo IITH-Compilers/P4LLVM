@@ -73,9 +73,20 @@ build_unified(BMV2_BACKEND_SRCS)
 add_library(bmv2backend ${BMV2_BACKEND_SRCS})
 add_dependencies(bmv2backend genIR)
 
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
 build_unified(BMV2_SRCS)
 add_executable(p4c-bm2-ss ${BMV2_SRCS})
-target_link_libraries (p4c-bm2-ss bmv2backend ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
+
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+
+target_link_libraries (p4c-bm2-ss bmv2backend ${llvm_libs} ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
 
 install(TARGETS p4c-bm2-ss RUNTIME DESTINATION ${P4C_RUNTIME_OUTPUT_DIRECTORY})
 
