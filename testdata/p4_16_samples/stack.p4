@@ -29,7 +29,7 @@ parser p()
         stack[2] = b;
         b = stack.next;
         int<32> e = stack.lastIndex;
-        transition accept;
+	transition accept;
     }
 }
 
@@ -42,6 +42,14 @@ control c() {
         stack.push_front(2);
         stack.pop_front(2);
         bit<32> sz = stack.size;
+	int<32> abc = stack.lastIndex;
+	bit s = 0;
+	if(sz==4 && s==0){
+		sz=3;
+		s=1;
+	}
+	if(abc==3)	
+		abc=5;
     }
 }
 

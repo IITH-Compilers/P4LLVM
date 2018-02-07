@@ -112,6 +112,7 @@ const IR::P4Program *FrontEnd::run(const CompilerOptions &options, const IR::P4P
     refMap.setIsV1(isv1);
 
     PassManager passes = {
+        
         new PrettyPrint(options),
         // Simple checks on parsed program
         new ValidateParsedProgram(),
@@ -153,7 +154,7 @@ const IR::P4Program *FrontEnd::run(const CompilerOptions &options, const IR::P4P
         new SimplifyControlFlow(&refMap, &typeMap),
         new SpecializeAll(&refMap, &typeMap),
         //
-        new EmitLLVMIR(program, options.file),
+        new EmitLLVMIR(program, options.file, &refMap, &typeMap),        
         //
         new RemoveParserControlFlow(&refMap, &typeMap),
         new FrontEndLast(),

@@ -45,6 +45,13 @@ class PassManager : virtual public Visitor, virtual public Backtrack {
     PassManager() = default;
     PassManager(const std::initializer_list<Visitor *> &init)
     { addPasses(init); }
+    ~PassManager()  {
+        for(std::vector<Visitor*>::iterator it = passes.begin(); it != passes.end(); ++it) {
+    /* std::cout << *it; ... */
+            delete(*it);
+            // std::cout<<"success delete\n";
+        }
+    }
     const IR::Node *apply_visitor(const IR::Node *, const char * = 0) override;
     bool backtrack(trigger &trig) override;
     bool never_backtracks() override;
