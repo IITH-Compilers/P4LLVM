@@ -37,46 +37,43 @@ namespace P4	{
 
 
     bool EmitLLVMIR::preorder(const IR::Declaration_Variable* t) {
-        std::cout<<"\nType of decl var = "<<t->type<<"\n";
-        std::cout<<"\getP4Type() = "<<t->type->getP4Type()<<"\n";
-        std::cout<<"\n*getP4Type() = "<<*t->type->getP4Type()<<"\n";
-        std::cout<<"\ntypemap contains? = "<<typeMap->contains(t)<<"\n";
-        std::cout<<"\n type = "<<typeMap->getType(t)->width_bits()<<"\n";
+        std::cout<<"name of variable = "<<t->getName()<<"\n";
         cstring p4Type = parseType(typeMap->getType(t));
-        unsigned width = getByteAlignment(typeMap->getType(t)->width_bits());
-        // Builder.SetInsertPoint(bbInsert);
-        // auto alloca;
-        std::cout<<"\nwidth from getbytealignment = "<<width<<"\n";
-        std::cout<<"\np4type = "<<p4Type<<"\n";
+        unsigned alignment = getByteAlignment(typeMap->getType(t)->width_bits());
+        AllocaInst* alloca;
         if(t->type->toString() == "bool")    {
-             Builder.CreateAlloca(Type::getInt8Ty(TheContext));    
-             std::cout<<"bool\n";        
+             alloca = Builder.CreateAlloca(Type::getInt8Ty(TheContext));        
         }
         else if(p4Type == "bit") {
-            Builder.CreateAlloca(ArrayType::get(Type::getInt8Ty(TheContext),width));
+            alloca = Builder.CreateAlloca(ArrayType::get(Type::getInt8Ty(TheContext),alignment));
         }
         else if(p4Type == "int") {
-            #define GETINT(SIZE) getInt##SIZETy(TheContext)
-            // Builder.CreateAlloca(GETINT(width));
-            std::cout<<"got int type as -- "<<GETINT(width)<<"\n";
+            int width = alignment*8;
+ 
+            if(width==1) {               
+                alloca = Builder.CreateAlloca(Type::getInt1Ty(TheContext));
+            }
+            else if(width==8) {                                  
+                alloca = Builder.CreateAlloca(Type::getInt8Ty(TheContext));
+            }
+            else if(width==16) {
+                alloca = Builder.CreateAlloca(Type::getInt16Ty(TheContext));
+            }
+            else if(width==32) {
+                alloca = Builder.CreateAlloca(Type::getInt32Ty(TheContext));
+            }
+            else if(width==64){
+                alloca = Builder.CreateAlloca(Type::getInt64Ty(TheContext));
+            }
+            else if(width==128){
+                alloca = Builder.CreateAlloca(Type::getInt128Ty(TheContext));
+            }
         }
 
+        st.insert("alloca_"+t->getName(),alloca);
         std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;
-        return true;
-    }
 
-    Value* EmitLLVMIR::codeGen(const IR::Declaration_Variable* t) {
-        std::cout<<"\nType of decl var = "<<t->type<<"\n";
-        // if(p4Type == "bool")    {
-        //     return Builder.CreateAlloca(Type::getInt8Ty(TheContext),width);            
-        // }
-        // if(p4Type == "bit") {
-        //     return Builder.CreateAlloca(ArrayType::get(Type::getInt8Ty(TheContext),width/8),width);
-        // }
-
-        std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        //return true;
-        
+       return true;
     }
 
 }

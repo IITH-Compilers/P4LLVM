@@ -35,12 +35,62 @@
 using namespace llvm;
 namespace P4 {
 
-class EmitLLVMIR : public Inspector {
-    // map<cstring,cstring> llvmTypeMap;
-    // llvmTypeMap.insert(pair<cstring,cstring> ("bool","i8"));
-    // llvmTypeMap.insert(pair<cstring,cstring> ("bit","i1"));
-    // llvmTypeMap.insert(pair<cstring,cstring> ("","i1"));
+template <typename T>
+class ScopeTable{
+    int scope;
+    std::vector<std::map<std::string, T>> dict;
+    typename std::vector<std::map<std::string, T>>::iterator it;
+  public:
+    ScopeTable(){
+        scope = 0;
+        dict.push_back(std::map<std::string,T>());
+    }
+    void insert(std::string str, T t)   {
+        dict.at(scope).insert(std::pair<std::string,T>(str,t));
+    }
+    void enterScope()   {
+        scope++;
+        dict.push_back(std::map<std::string,T>());        
+    }
+    void exitScope()    {
+        if(scope>0) {
+            it = dict.begin();	       
+            dict.erase(it+scope);
+            scope--;
+        }
+    }
+    T lookupLocal(std::string label) {
+        auto entry = dict.at(scope).find(label);
+        typename std::map <std::string, T> map = dict.at(scope);
+        for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
+            std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";
+        }
+        if(entry != dict.at(scope).end())
+            return entry->second;
+        else 
+            return 0;
+    }
+    T lookupGlobal(std::string label)   {
+        for(int i=scope; i>=0; i--) {
+            auto entry = dict.at(i).find(label);
+            if(entry != dict.at(i).end())
+                return entry->second;
+        }
+        return 0;
+    }
+    void printAll() {           
+        for(auto vitr = dict.begin(); vitr!=dict.end();vitr++) {
+            typename std::map <std::string, T> map(vitr->begin(), vitr->end());
+            std::cout<<"\nmap\n--------\n";
+            for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
+                std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";
+            }
+            
+        }
+    }
+};
 
+class EmitLLVMIR : public Inspector {
     std::unique_ptr<Function> function;
     int i =0;
     LLVMContext TheContext;
@@ -51,6 +101,7 @@ class EmitLLVMIR : public Inspector {
     BasicBlock *bbInsert;
     raw_fd_ostream *S;
     cstring fileName;
+    ScopeTable<Value*> st;
    public:
     EmitLLVMIR(const IR::P4Program* program, cstring fileName, ReferenceMap* refMap, TypeMap* typeMap) : fileName(fileName), Builder(TheContext), refMap(refMap), typeMap(typeMap) {
         CHECK_NULL(program); 
@@ -62,12 +113,8 @@ class EmitLLVMIR : public Inspector {
         Function *function = Function::Create(FT, Function::ExternalLinkage, "ebpf_filter", TheModule.get());
         bbInsert = BasicBlock::Create(TheContext, "entry", function);
         Builder.SetInsertPoint(bbInsert);
-        // bbInsert = BB;
         std::ostream& opStream = *openFile(fileName+".ll", true);
         setName("EmitLLVMIR");
-        
-        // function->print(S,nullptr);
-
     }
     ~EmitLLVMIR () {
         std::error_code ec;         
@@ -77,8 +124,6 @@ class EmitLLVMIR : public Inspector {
     }
     unsigned getByteAlignment(unsigned width);
     cstring parseType(const IR::Type*);
-    Value *codeGen(const IR::Declaration_Variable *t);
-
 
     // bool preorder(const IR::Type_Boolean* t)  {std::cout<<"\nType_Boolean\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     // bool preorder(const IR::Type_Varbits* t) {std::cout<<"\nType_Varbits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
