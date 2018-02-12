@@ -51,7 +51,7 @@ namespace P4	{
     // Need to create a map of struct name to its type pointer first (for struct of struct defination)
     bool EmitLLVMIR::preorder(const IR::Type_Struct* t)
     {
-    	std::cout<<"\nType_Struct\t "<<*t << "--> " << typeMap->getType(t) <<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+    	std::cout<<"\nType_Struct\t "<<*t << "\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
     	
     	AllocaInst* alloca;
 
@@ -80,9 +80,24 @@ namespace P4	{
     {
     	cstring p4Type;
     	int width = typeMap->getType(t)->width_bits();
-	    p4Type = typeMap->getType(t)->toString().substr(0, typeMap->getType(t)->toString().size()-1);
-	    p4Type = p4Type.substr(5, p4Type.size());	    
-    	MYDEBUG(std::cout << "\np4Type: " << p4Type << std::endl;)
+
+    	std::cout<<"width = "<<width<<"\n";
+    	int digitsInWidth = 0;
+    	while(width != 0)
+    	{
+    	    width /= 10;
+    	    ++digitsInWidth;
+    	}
+    	// std::cout<<"width = "<<width<<"\n";
+    	std::cout<<"digitsinwidth = "<<digitsInWidth<<"\n";
+    	
+    	if(digitsInWidth == 0)
+    	    p4Type =  t->toString();
+    	else
+    		p4Type = t->toString().substr(0,t->toString().size()-(digitsInWidth+2));
+
+
+	    MYDEBUG(std::cout << "\np4Type: " << p4Type << std::endl;)
     	unsigned alignment = getByteAlignment(typeMap->getType(t)->width_bits());
     	if(t->toString() == "bool")    {
     	    return(Type::getInt8Ty(TheContext));        
@@ -134,8 +149,28 @@ namespace P4	{
    			}
    		}
    		else {
-   			MYDEBUG(std::cout << __FILE__ << ":" << __LINE__ << ": Not Yet Implemented(Pointer returned =  Int32 for now) - Pankaj\n";)
-   			return(Type::getInt32Ty(TheContext));
+   			MYDEBUG(std::cout << __FILE__ << ":" << __LINE__ << ": Assuming Header Type - Pankaj\n";)
+   			auto struct_pointer = defined_type[p4Type];
+   			MYDEBUG(std::cout << __LINE__ << std::endl;)
+   			if(struct_pointer != NULL)
+   			{
+	   			return(struct_pointer);
+   			}
+   			else
+   			{
+   				MYDEBUG(std::cout << __LINE__ << std::endl;)
+   				std::vector<Type*> members;
+		    	// Iterate over all struct attributes
+		    	const IR::Type_Header *y = dynamic_cast<const IR::Type_Header *>(t);
+		    	MYDEBUG(std::cout << __LINE__ << std::endl;)
+		    	for(auto x: y->fields)
+		    	{
+		    		MYDEBUG(std::cout << __LINE__ << ":" << x->type << std::endl;);
+			    	members.push_back(getCorrespondingType(x->type)); // for struct variable
+		    	}
+		    	MYDEBUG(std::cout << __LINE__ << std::endl;)
+		    	return(llvm::StructType::get(TheContext, members));
+   			}
    		}
 	}
 }
