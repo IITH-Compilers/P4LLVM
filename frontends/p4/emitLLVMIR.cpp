@@ -183,7 +183,7 @@ namespace P4	{
 		else if(t->is<IR::Type_Name>())
 		{
 			// Implement it as struct -> this is refered by type
-
+ ;
 			auto x = typeMap->getTypeType(t, true);
     		if (x->is<IR::Type_Struct>()) 
     		{
