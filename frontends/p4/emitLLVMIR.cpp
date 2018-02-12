@@ -58,7 +58,7 @@ namespace P4	{
     	std::vector<Type*> members;
     	for(auto x: t->fields)
     	{
-    		MYDEBUG(std::cout << __LINE__ << ":" << x->type;);
+    		MYDEBUG(std::cout << __LINE__ << ":" << x->type << std::endl;);
     		// if()
 	    	members.push_back(getCorrespondingType(x->type)); // for int and all
 	    	// members.push_back(llvm::StructType::get(TheContext, members, "struct.A")) //  for struct of struct
@@ -80,26 +80,8 @@ namespace P4	{
     {
     	cstring p4Type;
     	int width = typeMap->getType(t)->width_bits();
-    	MYDEBUG(std::cout<<"width = "<< width <<"\n";)
-    	int digitsInWidth = 0;
-    	while(width != 0)
-    	{
-    	    width /= 10;
-    	    ++digitsInWidth;
-    	}
-    	// std::cout<<"width = "<<width<<"\n";
-    	MYDEBUG(std::cout<<"digitsinwidth = "<<digitsInWidth<<"\n";)
-    	if(digitsInWidth == 0)
-    	{
-    	    p4Type = typeMap->getType(t)->toString();
-    	}
-    	else
-    	{
-	    	cstring type = typeMap->getType(t)->toString().substr(0,typeMap->getType(t)->toString().size()-(digitsInWidth+2));
-	    	MYDEBUG(std::cout<<"parsed type is = "<<type;)
-	    	p4Type = type;
-	    }
-
+	    p4Type = typeMap->getType(t)->toString().substr(0, typeMap->getType(t)->toString().size()-1);
+	    p4Type = p4Type.substr(5, p4Type.size());	    
     	MYDEBUG(std::cout << "\np4Type: " << p4Type << std::endl;)
     	unsigned alignment = getByteAlignment(typeMap->getType(t)->width_bits());
     	if(t->toString() == "bool")    {
@@ -152,7 +134,7 @@ namespace P4	{
    			}
    		}
    		else {
-   			MYDEBUG(std::cout << __FILE__ << ":" << __LINE__ << "Not Yet Implemented(Pointer returned =  Int32 for now) - Pankaj\n";)
+   			MYDEBUG(std::cout << __FILE__ << ":" << __LINE__ << ": Not Yet Implemented(Pointer returned =  Int32 for now) - Pankaj\n";)
    			return(Type::getInt32Ty(TheContext));
    		}
 	}
