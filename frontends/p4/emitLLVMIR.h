@@ -129,13 +129,17 @@ class EmitLLVMIR : public Inspector {
         setName("EmitLLVMIR");
     }
     ~EmitLLVMIR () {
+        for(auto x: defined_type)
+        {
+            std::cout << x.first << std::endl;
+        }
+
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
         TheModule->print(*S,nullptr);
         std::cout<<"\n************************************************************************\n";
     }
     unsigned getByteAlignment(unsigned width);
-    cstring parseType(const IR::Type* p4Type);
     llvm::Type* getCorrespondingType(const IR::Type *t);
     bool preorder(const IR::Type_Boolean* t)  {std::cout<<"\nType_Boolean\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     bool preorder(const IR::Type_Varbits* t) {std::cout<<"\nType_Varbits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
@@ -145,9 +149,12 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::Type_Dontcare* t) {std::cout<<"\nType_Dontcare\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Void* t) {std::cout<<"\nype_Void\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Error* t) {std::cout<<"\nType_Error\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
-    bool preorder(const IR::Type_Struct* t) override;
-    bool preorder(const IR::Type_Header* t) {std::cout<<"\nType_Header\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
-    bool preorder(const IR::Type_HeaderUnion* t) {std::cout<<"\nType_HeaderUnion\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
+    // bool preorder(const IR::Type_Struct* t) override;
+    bool preorder(const IR::Type_StructLike* t) override;
+    // bool preorder(const IR::Type_Name* t) override;
+    
+    //bool preorder(const IR::Type_Header* t) override {std::cout<<"\nType_Header\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
+    // bool preorder(const IR::Type_HeaderUnion* t) {std::cout<<"\nType_HeaderUnion\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     bool preorder(const IR::Type_Package* t) {std::cout<<"\nType_Package\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Parser* t) {std::cout<<"\nType_Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Control* t) {std::cout<<"\nype_Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
