@@ -30,7 +30,7 @@
 #include <vector>
 #include "iostream"
 #include "lib/nullstream.h"
-
+#include "llvm/ADT/APInt.h"
 // class Value;
 using namespace llvm;
 
@@ -42,10 +42,15 @@ using namespace llvm;
 
 
 
-
+#ifndef REPORTBUG
+#define REPORTBUG(x) x
+#endif
 namespace P4 {
 
 template <typename T>
+
+
+
 class ScopeTable{
     int scope;
     std::vector<std::map<std::string, T>> dict;
@@ -101,7 +106,7 @@ class ScopeTable{
 };
 
 class EmitLLVMIR : public Inspector {
-    std::unique_ptr<Function> function;
+    Function *function;
     int i =0;
     LLVMContext TheContext;
     std::unique_ptr<Module> TheModule;
@@ -113,7 +118,7 @@ class EmitLLVMIR : public Inspector {
     cstring fileName;
     ScopeTable<Value*> st;
     std::map<cstring, llvm::Type *> defined_type;
-    
+    std::map<cstring, llvm::BasicBlock *> defined_state;
    public:
     EmitLLVMIR(const IR::P4Program* program, cstring fileName, ReferenceMap* refMap, TypeMap* typeMap) : fileName(fileName), Builder(TheContext), refMap(refMap), typeMap(typeMap) {
         CHECK_NULL(program); 
@@ -122,18 +127,15 @@ class EmitLLVMIR : public Inspector {
         TheModule = llvm::make_unique<Module>("p4Code", TheContext);
         std::vector<Type*> args;
         FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
-        Function *function = Function::Create(FT, Function::ExternalLinkage, "ebpf_filter", TheModule.get());
+        function = Function::Create(FT, Function::ExternalLinkage, "ebpf_filter", TheModule.get());
+        
         bbInsert = BasicBlock::Create(TheContext, "entry", function);
         Builder.SetInsertPoint(bbInsert);
         std::ostream& opStream = *openFile(fileName+".ll", true);
         setName("EmitLLVMIR");
     }
     ~EmitLLVMIR () {
-        for(auto x: defined_type)
-        {
-            std::cout << x.first << std::endl;
-        }
-
+        Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
         TheModule->print(*S,nullptr);
@@ -141,6 +143,7 @@ class EmitLLVMIR : public Inspector {
     }
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
+    Value* processExpression(const IR::Expression* e, llvm::Type* type);
     bool preorder(const IR::Type_Boolean* t)  {std::cout<<"\nType_Boolean\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     bool preorder(const IR::Type_Varbits* t) {std::cout<<"\nType_Varbits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Bits* t) {std::cout<<"\nType_Bits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
@@ -152,7 +155,7 @@ class EmitLLVMIR : public Inspector {
     // bool preorder(const IR::Type_Struct* t) override;
     bool preorder(const IR::Type_StructLike* t) override;
     // bool preorder(const IR::Type_Name* t) override;
-    
+
     //bool preorder(const IR::Type_Header* t) override {std::cout<<"\nType_Header\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     // bool preorder(const IR::Type_HeaderUnion* t) {std::cout<<"\nType_HeaderUnion\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     bool preorder(const IR::Type_Package* t) {std::cout<<"\nType_Package\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
@@ -162,7 +165,7 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::Type_Stack* t) {std::cout<<"\nType_Stack\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Specialized* t) {std::cout<<"\nType_Specialized\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Enum* t) {std::cout<<"\nType_Enum\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
-    bool preorder(const IR::Type_Typedef* t) {std::cout<<"\nType_Typedef\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
+    // bool preorder(const IR::Type_Typedef* t) {std::cout<<"\nType_Typedef\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Extern* t) {std::cout<<"\nType_Extern\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Unknown* t) {std::cout<<"\nType_Unknown\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::Type_Tuple* t) {std::cout<<"\nType_Tuple\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
@@ -227,10 +230,10 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::Parameter* t) {std::cout<<"\nParameter\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
     bool preorder(const IR::Annotation* t) {std::cout<<"\nAnnotation\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
     bool preorder(const IR::P4Program* t) {std::cout<<"\nP4Program\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
-    bool preorder(const IR::P4Control* t) {std::cout<<"\nP4Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
+    bool preorder(const IR::P4Control* t) override;//{std::cout<<"\nP4Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::P4Action* t) {std::cout<<"\nP4Action\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
-    bool preorder(const IR::ParserState* t) {std::cout<<"\nParserState\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
-    bool preorder(const IR::P4Parser* t) {std::cout<<"\nP4Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
+    bool preorder(const IR::ParserState* t) override;//{std::cout<<"\nParserState\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
+    bool preorder(const IR::P4Parser* t) override;// {std::cout<<"\nP4Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};
     bool preorder(const IR::TypeParameters* t) {std::cout<<"\nTypeParameters\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
     bool preorder(const IR::ParameterList* t) {std::cout<<"\nParameterList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
     bool preorder(const IR::Method* t) {std::cout<<"\nMethod\t "<<t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};

@@ -54,6 +54,106 @@ namespace P4	{
     	return true;
     }
 
+    bool EmitLLVMIR::preorder(const IR::P4Parser* t)
+    {
+        // Parser have apply methods
+        // MYDEBUG(std::cout<< t->)
+        for (auto s : t->states)
+        {
+            llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, std::string(s->name.name), function);
+            defined_state[s->name.name] = bbInsert;
+            MYDEBUG(std::cout << s->name.name << std::endl;);
+        }
+        for (auto s : t->states)
+        {
+            visit(s);
+        }
+        Builder.SetInsertPoint(defined_state["accept"]);
+        return false;
+    }
+
+    bool EmitLLVMIR::preorder(const IR::ParserState* parserState)
+    {
+        std::cout<<"\nParserState\t "<<*parserState<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        
+
+        if(parserState->name == "start")
+        {
+            // if start state then create branch
+            // from main function to start block
+            Builder.CreateBr(defined_state[parserState->name.name]);
+        }
+        
+
+        // set this block as insert point
+        Builder.SetInsertPoint(defined_state[parserState->name.name]);
+        if (parserState->name == "accept")
+        {
+            return false;
+
+        }
+        else if(parserState->name == "reject")
+        {
+            Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
+            return false;
+        }
+        
+
+        // visit all the StatOrDecl
+        for(auto s: parserState->components)
+        {
+            visit(s, "components");// or class helper function if defined
+        }
+
+        // if  select expression is null
+        // Create branch to reject(there should be some transition)
+        if (parserState->selectExpression == nullptr)
+        {
+            MYDEBUG(std::cout<< parserState->selectExpression << std::endl;);
+            Builder.CreateBr(defined_state["reject"]); // if reject then return 0;
+        } 
+        // visit SelectExpression
+        else if (parserState->selectExpression->is<IR::SelectExpression>())
+        {
+            visit(parserState->selectExpression, "PathExpression");
+        } 
+        //  Else transition expression
+        else
+        {
+            // must be a PathExpression which is goto 'state' state name
+            if (parserState->selectExpression->is<IR::PathExpression>())
+            {
+                const IR::PathExpression *x = dynamic_cast<const IR::PathExpression *>( parserState->selectExpression);
+                Builder.CreateBr(defined_state[x->path->asString()]);
+            }
+            // bug 
+            else
+            {
+                REPORTBUG(std::cout << __FILE__ << ":" << __LINE__ << ": Got Unknown Expression type" << std::endl;);
+            }
+        }
+        return false;
+    }
+    
+
+
+
+
+
+
+    bool EmitLLVMIR::preorder(const IR::P4Control* t)
+    {
+        MYDEBUG(std::cout << t->type << std::endl;);
+        llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, "control_block", function);
+        // visit(t->type, "Type_Control");
+        return false;
+    }
+
+
+
+
+
+
 
     // Helper Function
     llvm::Type* EmitLLVMIR::getCorrespondingType(const IR::Type *t)
@@ -85,10 +185,14 @@ namespace P4	{
     	{
     		if(defined_type[t->toString()])
     		{
-    			llvm::Type *x = defined_type[t->toString()]; 
-    			return(x);
-    		}
-
+    			llvm::Type *x = defined_type[t->toString()];
+                llvm::StructType *y = dyn_cast<llvm::StructType>(x);
+                if(!y->isOpaque()) // if opaque then define it
+                {
+        			return(x);
+                }
+                MYDEBUG(std::cout<<" isOpaque : True for " << t->toString() << std::endl);
+            }
     		const IR::Type_StructLike *strct = dynamic_cast<const IR::Type_StructLike *>(t);
     		if (!t->is<IR::Type_Struct>() && !t->is<IR::Type_Header>() && !t->is<IR::Type_HeaderUnion>())
     		{
@@ -110,15 +214,23 @@ namespace P4	{
 
     	//eg-> header Ethernet_t is refered by Ethernet_t (type name is Ethernet_t) 
     	// c++ equal => typedef struct x x --> As far as i understood
+        else if(t->is<IR::Type_Typedef>())
+        {
+            // MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+            const IR::Type_Typedef *x = dynamic_cast<const IR::Type_Typedef *>(t);
+            return(getCorrespondingType(x->type)); 
+        }
 		else if(t->is<IR::Type_Name>())
 		{
 			if(defined_type[t->toString()])
 			{
 				return(defined_type[t->toString()]);
 			}
-			llvm::Type *temp = llvm::StructType::create(TheContext, "struct." + std::string(t->toString()));
-			defined_type[t->toString()] = temp;
-			return(temp);
+			// llvm::Type *temp = llvm::StructType::create(TheContext, "struct." + std::string(t->toString()));
+            // FillIt(temp, t);
+            auto canon = typeMap->getTypeType(t, true);
+            defined_type[t->toString()] = getCorrespondingType(canon);
+            return (defined_type[t->toString()]);
 		}
     	else if(t->is<IR::Type_Tuple>())
     	{
@@ -149,9 +261,19 @@ namespace P4	{
 		{
 			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
 		}
+        else if(t->is<IR::Type_Enum>())
+        {
+            const IR::Type_Enum *t_enum = dynamic_cast<const IR::Type_Enum *>(t);
+
+            for(auto x: t_enum->members)
+            {
+                std::cout << x->name << " " << x->declid << std::endl;
+            }
+            MYDEBUG(std::cout << "Incomplete Function : " <<__LINE__ << " : Not Yet Implemented for Type_Enum " << t->toString() << std::endl;)
+        }
 		else
 		{
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString() << "==> getTypeType ==> " << typeMap->getTypeType(t, true) << std::endl;)
 		}
 		MYDEBUG(std::cout << "Returning Int64 for Incomplete Type" << std::endl;)
     	return(Type::getInt64Ty(TheContext));
