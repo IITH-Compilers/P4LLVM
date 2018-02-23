@@ -26,10 +26,11 @@ namespace P4	{
     {
 	    AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
     	st.insert("alloca_"+t->getName(),alloca);
+		// std::cout<<"t->name.name = "<< t->name.name << "t->name = "<<t->name<<"\nt->getname = "<<t->getName()<<"\n t->tostring() = "<<t->toString()<<"\n ";
+		// std::cout<<" t->externalName() = "<<t->externalName()<<"\n  t->getName().name-> = "<<t->getName().name<<"\n   t->controlplanename-> = "<<t->controlPlaneName()<<"\n ";		
     	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;
     	return true;
     }
-
 
     bool EmitLLVMIR::preorder(const IR::Type_StructLike* t)
     {
@@ -53,6 +54,7 @@ namespace P4	{
     	st.insert("alloca_"+t->getName(),alloca);
     	return true;
     }
+
 
     bool EmitLLVMIR::preorder(const IR::P4Parser* t)
     {
@@ -94,7 +96,7 @@ namespace P4	{
         }
         else if(parserState->name == "reject")
         {
-            Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
+            Builder.CreateRetVoid();
             return false;
         }
         
@@ -141,18 +143,117 @@ namespace P4	{
 
 
 
-    bool EmitLLVMIR::preorder(const IR::P4Control* t)
+    // bool EmitLLVMIR::preorder(const IR::P4Control* t)
+    // {
+    //     MYDEBUG(std::cout << t->type << std::endl;);
+    //     llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, "control_block", function);
+    //     // visit(t->type, "Type_Control");
+    //     return false;
+    // }
+
+
+
+
+
+
+	bool EmitLLVMIR::preorder(const IR::AssignmentStatement* t)
     {
-        MYDEBUG(std::cout << t->type << std::endl;);
-        llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, "control_block", function);
-        // visit(t->type, "Type_Control");
-        return false;
+        std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+		llvm::Type* llvmType = nullptr;
+
+		if(t->left->is<IR::PathExpression>())	{
+			cstring name = refMap->getDeclaration(t->left->to<IR::PathExpression>()->path)->getName();
+			std::cout<<"name using refmap = "<<name<<std::endl;		
+			Value* v = st.lookupLocal("alloca_"+name);
+
+			assert(v != nullptr);
+
+			llvmType = defined_type[typeMap->getType(t->left)->toString()];
+			std::cout<<"defined_type["<< typeMap->getType(t->left)->toString()<<"]\n";
+			std::cout<<"t->left->tostring = "<<t->left->toString()<<"\n";
+			assert(llvmType != nullptr);
+
+			Value* right = processExpression(t->right, llvmType);
+			
+			if(right != nullptr)	{
+				//store 
+				Builder.CreateStore(right,v);			
+			}
+			
+		}
+
+		// else	{
+		// 	//To-Do
+		// }
+		// generateAssignmentStatements(t->left,t->right);
+        
+        return true;
     }
 
+	Value* EmitLLVMIR::processExpression(const IR::Expression* e, llvm::Type* type)	{
+		assert(e != nullptr);
+		assert(type != nullptr);
+		
+		llvm::Type* llvmType = nullptr;
 
+		if(e->is<IR::Constant>())   
+			return ConstantInt::get(type,(e->to<IR::Constant>()->value).get_si());
 
+		if(e->is<IR::PathExpression>())	{
+			cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();	
+			Value* v = st.lookupLocal("alloca_"+name);
+			assert(v != nullptr);
+			return Builder.CreateLoad(v);
+		}
 
+		if(e->is<IR::Operation_Binary>())	{
+			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
+			Value* left = processExpression(obe->left, type);
+			Value* right = processExpression(obe->right, type);
 
+			if(e->is<IR::Add>())	
+				return Builder.CreateAdd(left,right);	
+
+			if(e->is<IR::Sub>())	
+				return Builder.CreateSub(left,right);	
+
+			if(e->is<IR::Mul>())	
+				return Builder.CreateMul(left,right);	
+
+			if(e->is<IR::Div>())	
+				return Builder.CreateUDiv(left,right);	
+
+			if(e->is<IR::Mod>())
+				return Builder.CreateURem(left,right);	
+
+			if(e->is<IR::Shl>())
+				return Builder.CreateShl(left,right);	
+
+			if(e->is<IR::Shr>())
+				return Builder.CreateLShr(left,right);
+
+			if(e->is<IR::BAnd>())
+				return Builder.CreateAnd(left,right);
+			
+			if(e->is<IR::BOr>())
+				return Builder.CreateOr(left,right);
+
+			if(e->is<IR::BXor>())
+				return Builder.CreateXor(left,right);
+
+			if(e->is<IR::Operation_Relation>());
+				//To-Do
+		}
+
+		if(e->is<IR::Operation_Unary>())	{
+			//To-Do
+			// const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
+			// Value* exp = processExpression(oue->expr, type);
+
+			// if(e->is<IR::Neg>())
+			// 	return Builder.
+		}
+	}
 
 
     // Helper Function
@@ -160,8 +261,10 @@ namespace P4	{
     {
 
     	if(t->is<IR::Type_Boolean>())
-    	{
-	    	return(Type::getInt8Ty(TheContext));
+    	{	
+			llvm::Type *temp = Type::getInt8Ty(TheContext);							
+			defined_type[t->toString()] = temp;
+	    	return temp;
     	}
 
     	// if int<> or bit<> /// bit<32> x; /// The type of x is Type_Bits(32); /// The type of 'bit<32>' is Type_Type(Type_Bits(32))
@@ -172,12 +275,16 @@ namespace P4	{
     		int width = x->width_bits(); // false
     		// To do this --> How to implement unsigned and signed int in llvm
     		if(x->isSigned)
-    		{
-				return(Type::getIntNTy(TheContext, getByteAlignment(width)));
+    		{	
+				llvm::Type *temp = Type::getIntNTy(TheContext, getByteAlignment(width));				
+				defined_type[t->toString()] = temp;
+				return temp;
     		}
     		else 
-    		{
-    			return(Type::getIntNTy(TheContext, getByteAlignment(width)));
+    		{	
+				llvm::Type *temp = Type::getIntNTy(TheContext, getByteAlignment(width));
+				defined_type[t->toString()] = temp;
+    			return temp;
     		}
     	}
 
@@ -278,4 +385,22 @@ namespace P4	{
 		MYDEBUG(std::cout << "Returning Int64 for Incomplete Type" << std::endl;)
     	return(Type::getInt64Ty(TheContext));
 	}
+
+    // void buildStoreInst(Type* type, Type* oldType=nullptr)    {
+    //     switch(type->getTypeID())  {
+    //         case Type::TypeID::IntegerTyID :
+    //             if(oldType != nullptr && oldType->getTypeID()==Type::TypeID::ArrayTyID && oldType->get)  {
+
+    //             }
+
+    //             Builder.CreateStore(ConstantInt::get(type,(con_literal->value).get_ui()),v);                
+    //             std::cout<<"found type to be integer - "<<type->getIntegerBitWidth()<<std::endl;
+    //         case Type::TypeID::ArrayTyID :
+    //             if(type->getArrayNumElements() == 1)
+    //             // buildStoreInst
+
+
+    //     }
+    // }
+
 }
