@@ -25,9 +25,7 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::Declaration_Variable* t)
     {
 	    AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
-    	st.insert("alloca_"+t->getName(),alloca);
-		// std::cout<<"t->name.name = "<< t->name.name << "t->name = "<<t->name<<"\nt->getname = "<<t->getName()<<"\n t->tostring() = "<<t->toString()<<"\n ";
-		// std::cout<<" t->externalName() = "<<t->externalName()<<"\n  t->getName().name-> = "<<t->getName().name<<"\n   t->controlplanename-> = "<<t->controlPlaneName()<<"\n ";		
+    	st.insert("alloca_"+t->getName(),alloca);		
     	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;
     	return true;
     }
@@ -185,7 +183,6 @@ namespace P4	{
 		// else	{
 		// 	//To-Do
 		// }
-		// generateAssignmentStatements(t->left,t->right);
         
         return true;
     }
@@ -195,6 +192,13 @@ namespace P4	{
 		assert(type != nullptr);
 		
 		llvm::Type* llvmType = nullptr;
+
+		if(e->is<IR::Operation_Unary>())	{
+			const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
+			Value* exp = processExpression(oue->expr, type);
+			if(e->is<IR::Cmpl>()) 
+				return Builder.CreateXor(exp,-1);
+		}
 
 		if(e->is<IR::Constant>())   
 			return ConstantInt::get(type,(e->to<IR::Constant>()->value).get_si());
@@ -208,8 +212,12 @@ namespace P4	{
 
 		if(e->is<IR::Operation_Binary>())	{
 			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
-			Value* left = processExpression(obe->left, type);
-			Value* right = processExpression(obe->right, type);
+			Value* left; Value* right;
+			left = processExpression(obe->left, type);
+			
+			if(!(e->is<IR::LAnd>() || e->is<IR::LOr>()))	{
+				right = processExpression(obe->right, type);
+			}
 
 			if(e->is<IR::Add>())	
 				return Builder.CreateAdd(left,right);	
@@ -221,10 +229,10 @@ namespace P4	{
 				return Builder.CreateMul(left,right);	
 
 			if(e->is<IR::Div>())	
-				return Builder.CreateUDiv(left,right);	
+				return Builder.CreateSDiv(left,right);	
 
 			if(e->is<IR::Mod>())
-				return Builder.CreateURem(left,right);	
+				return Builder.CreateSRem(left,right);	
 
 			if(e->is<IR::Shl>())
 				return Builder.CreateShl(left,right);	
@@ -241,17 +249,73 @@ namespace P4	{
 			if(e->is<IR::BXor>())
 				return Builder.CreateXor(left,right);
 
-			if(e->is<IR::Operation_Relation>());
-				//To-Do
-		}
+			if(e->is<IR::LAnd>())	{
+	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.rhs", function);
+	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.end", function);
+				
+				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(type,0));
+				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+		        
+				Builder.SetInsertPoint(bbTrue);
+				BasicBlock* bbParent = bbTrue->getSinglePredecessor();
+				assert(bbParent != nullptr);
+				
+				right = processExpression(obe->right, type);
+				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(type,0));
+				Builder.CreateBr(bbFalse);
 
-		if(e->is<IR::Operation_Unary>())	{
-			//To-Do
-			// const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
-			// Value* exp = processExpression(oue->expr, type);
+				Builder.SetInsertPoint(bbFalse);
+				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
+				phi->addIncoming(ConstantInt::getFalse(TheContext), bbParent);
+				phi->addIncoming(icmp2, bbTrue);
+				return Builder.CreateZExt(phi, type);
+			}
 
-			// if(e->is<IR::Neg>())
-			// 	return Builder.
+			if(e->is<IR::LOr>())	{
+	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.end", function);
+	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.rhs", function);
+				
+				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(type,0));
+				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+		        
+				Builder.SetInsertPoint(bbFalse);
+				BasicBlock* bbParent = bbFalse->getSinglePredecessor();
+				assert(bbParent != nullptr);
+				
+				right = processExpression(obe->right, type);
+				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(type,0));
+				Builder.CreateBr(bbTrue);
+
+				Builder.SetInsertPoint(bbTrue);
+				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
+				phi->addIncoming(ConstantInt::getTrue(TheContext), bbParent);
+				phi->addIncoming(icmp2, bbTrue);
+				return Builder.CreateZExt(phi, type);
+			}
+
+			if(e->is<IR::Operation_Relation>())	{
+				if(obe->right->is<IR::Constant>())
+					right = processExpression(obe->right, defined_type[typeMap->getType(obe->left)->toString()]);
+
+				if(e->is<IR::Equ>())
+					return Builder.CreateZExt(Builder.CreateICmpEQ(left,right), type);
+
+				if(e->is<IR::Neq>())	
+					return Builder.CreateZExt(Builder.CreateICmpNE(left,right), type);
+					
+				if(e->is<IR::Lss>())	
+					return Builder.CreateZExt(Builder.CreateICmpSLT(left,right), type);
+				
+				if(e->is<IR::Leq>())	
+					return Builder.CreateZExt(Builder.CreateICmpSLE(left,right), type);
+
+				if(e->is<IR::Grt>())	
+					return Builder.CreateZExt(Builder.CreateICmpSGT(left,right), type);
+
+				if(e->is<IR::Geq>())	
+					return Builder.CreateZExt(Builder.CreateICmpSGE(left,right), type);
+			}
+				
 		}
 	}
 
@@ -385,22 +449,4 @@ namespace P4	{
 		MYDEBUG(std::cout << "Returning Int64 for Incomplete Type" << std::endl;)
     	return(Type::getInt64Ty(TheContext));
 	}
-
-    // void buildStoreInst(Type* type, Type* oldType=nullptr)    {
-    //     switch(type->getTypeID())  {
-    //         case Type::TypeID::IntegerTyID :
-    //             if(oldType != nullptr && oldType->getTypeID()==Type::TypeID::ArrayTyID && oldType->get)  {
-
-    //             }
-
-    //             Builder.CreateStore(ConstantInt::get(type,(con_literal->value).get_ui()),v);                
-    //             std::cout<<"found type to be integer - "<<type->getIntegerBitWidth()<<std::endl;
-    //         case Type::TypeID::ArrayTyID :
-    //             if(type->getArrayNumElements() == 1)
-    //             // buildStoreInst
-
-
-    //     }
-    // }
-
 }
