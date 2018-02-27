@@ -9,47 +9,11 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::Declaration_Variable* t)
     {
 	    AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
-    	st.insert("alloca_"+t->getName(),alloca);
-		// std::cout<<"t->name.name = "<< t->name.name << "t->name = "<<t->name<<"\nt->getname = "<<t->getName()<<"\n t->tostring() = "<<t->toString()<<"\n ";
-		// std::cout<<" t->externalName() = "<<t->externalName()<<"\n  t->getName().name-> = "<<t->getName().name<<"\n   t->controlplanename-> = "<<t->controlPlaneName()<<"\n ";		
-    	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
+    	st.insert("alloca_"+t->getName(),alloca);		
+    	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;
+    	return true;
     }
 
-    bool EmitLLVMIR::preorder(const IR::AssignmentStatement* t)
-        {
-            std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-            llvm::Type* llvmType = nullptr;
-
-            if(t->left->is<IR::PathExpression>())   {
-                cstring name = refMap->getDeclaration(t->left->to<IR::PathExpression>()->path)->getName();
-                std::cout<<"name using refmap = "<<name<<std::endl;     
-                Value* v = st.lookupLocal("alloca_"+name);
-
-                assert(v != nullptr);
-
-                llvmType = defined_type[typeMap->getType(t->left)->toString()];
-                std::cout<<"defined_type["<< typeMap->getType(t->left)->toString()<<"]\n";
-                std::cout<<"t->left->tostring = "<<t->left->toString()<<"\n";
-                assert(llvmType != nullptr);
-
-                Value* right = processExpression(t->right);
-                
-                if(right != nullptr)    {
-                    if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
-                        right = Builder.CreateZExt(right, llvmType);
-                    //store 
-                    Builder.CreateStore(right,v);           
-                }
-                
-            }
-
-            // else {
-            //  //To-Do
-            // }
-            
-            return true;
-        }
 
         bool EmitLLVMIR::preorder(const IR::IfStatement* t) {
             std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
@@ -444,7 +408,40 @@ namespace P4	{
         return true;
     }
 
+    bool EmitLLVMIR::preorder(const IR::AssignmentStatement* t)
+    {
+        std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+		llvm::Type* llvmType = nullptr;
 
+		if(t->left->is<IR::PathExpression>())	{
+			cstring name = refMap->getDeclaration(t->left->to<IR::PathExpression>()->path)->getName();
+			std::cout<<"name using refmap = "<<name<<std::endl;		
+			Value* v = st.lookupLocal("alloca_"+name);
+
+			assert(v != nullptr);
+
+			llvmType = defined_type[typeMap->getType(t->left)->toString()];
+			std::cout<<"defined_type["<< typeMap->getType(t->left)->toString()<<"]\n";
+			std::cout<<"t->left->tostring = "<<t->left->toString()<<"\n";
+			assert(llvmType != nullptr);
+
+			Value* right = processExpression(t->right);
+			
+			if(right != nullptr)	{
+				if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
+					right = Builder.CreateZExt(right, llvmType);
+				//store 
+				Builder.CreateStore(right,v);			
+			}
+			
+		}
+
+		// else	{
+		// 	//To-Do
+		// }
+        
+        return true;
+    }
 
 
 
@@ -456,10 +453,6 @@ namespace P4	{
         visit(t->applyParams);                   
         return true;
     }
-
-
-
-
     bool EmitLLVMIR::preorder(const IR::P4Control* t)
     {
         std::cout<<"\nP4Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
@@ -469,7 +462,6 @@ namespace P4	{
         visit(t->body); // BlockStatement
         return true;
     }
-
 
 
 
@@ -487,6 +479,8 @@ namespace P4	{
         else
             return 64; // compiled as u8* 
     }
+
+
 
 
     // Helper Function
@@ -653,6 +647,7 @@ namespace P4	{
 		MYDEBUG(std::cout << "Returning Int32 pointer for Incomplete Type" << std::endl;)
     	return(Type::getInt32PtrTy(TheContext));
 	}
+
 
     // void buildStoreInst(Type* type, Type* oldType=nullptr)    {
     //     switch(type->getTypeID())  {
@@ -1032,6 +1027,4 @@ namespace P4	{
         
     }
         
-
-
 }

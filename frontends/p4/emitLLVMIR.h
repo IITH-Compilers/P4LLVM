@@ -163,6 +163,7 @@ class EmitLLVMIR : public Inspector {
     llvm::Value* processExpression(const IR::Expression *e);
 
 
+
     // Visitor function
     bool preorder(const IR::Type_Boolean* t) override;
     bool preorder(const IR::Type_Varbits* t) override;
@@ -250,6 +251,8 @@ class EmitLLVMIR : public Inspector {
     // in case it is accidentally called on a V1Program
     bool preorder(const IR::V1Program*) override;
     bool preorder(const IR::Type_Extern* t) override;
+
+
     bool preorder(const IR::Type_StructLike* t) override;
     bool preorder(const IR::AssignmentStatement* t) override;
     bool preorder(const IR::P4Control* t) override;
@@ -265,36 +268,6 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::Vector<IR::Type>* t) override;
     bool preorder(const IR::IndexedVector<IR::StatOrDecl>* t) override;
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }  // namespace P4
 #endif
 #endif /* _FRONTENDS_P4_LLVMIR_H_ */
