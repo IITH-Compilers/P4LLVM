@@ -6,24 +6,6 @@
 
 namespace P4	{
 
-
-
-
-	///// --> To do very big bit size 
-    unsigned EmitLLVMIR::getByteAlignment(unsigned width) {
-    	if (width <= 8)
-    	    return 8;
-    	else if (width <= 16)
-    	    return 16;
-    	else if (width <= 32)
-    	    return 32;
-    	else if (width <= 64)
-    	    return 64;
-    	else
-    	    // compiled as u8* 
-    	    return 64;
-    }
-
     bool EmitLLVMIR::preorder(const IR::Declaration_Variable* t)
     {
 	    AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
@@ -33,6 +15,214 @@ namespace P4	{
     	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
         return true;
     }
+
+    bool EmitLLVMIR::preorder(const IR::AssignmentStatement* t)
+        {
+            std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+            llvm::Type* llvmType = nullptr;
+
+            if(t->left->is<IR::PathExpression>())   {
+                cstring name = refMap->getDeclaration(t->left->to<IR::PathExpression>()->path)->getName();
+                std::cout<<"name using refmap = "<<name<<std::endl;     
+                Value* v = st.lookupLocal("alloca_"+name);
+
+                assert(v != nullptr);
+
+                llvmType = defined_type[typeMap->getType(t->left)->toString()];
+                std::cout<<"defined_type["<< typeMap->getType(t->left)->toString()<<"]\n";
+                std::cout<<"t->left->tostring = "<<t->left->toString()<<"\n";
+                assert(llvmType != nullptr);
+
+                Value* right = processExpression(t->right);
+                
+                if(right != nullptr)    {
+                    if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
+                        right = Builder.CreateZExt(right, llvmType);
+                    //store 
+                    Builder.CreateStore(right,v);           
+                }
+                
+            }
+
+            // else {
+            //  //To-Do
+            // }
+            
+            return true;
+        }
+
+        bool EmitLLVMIR::preorder(const IR::IfStatement* t) {
+            std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+            
+            Value* cond = processExpression(t->condition);
+            
+            BasicBlock* bbIf = BasicBlock::Create(TheContext, "if.then", function);
+            BasicBlock* bbElse = BasicBlock::Create(TheContext, "if.else", function);
+            BasicBlock* bbEnd = BasicBlock::Create(TheContext, "if.end", function);
+            
+            Builder.CreateCondBr(cond, bbIf, bbElse);
+
+            Builder.SetInsertPoint(bbIf);
+            visit(t->ifTrue);
+            Builder.CreateBr(bbEnd);
+
+            Builder.SetInsertPoint(bbElse);
+            visit(t->ifFalse);
+            Builder.CreateBr(bbEnd);
+
+            Builder.SetInsertPoint(bbEnd);
+            return true;
+        }
+
+        Value* EmitLLVMIR::processExpression(const IR::Expression* e)   {
+            assert(e != nullptr);
+
+            if(e->is<IR::Operation_Unary>())    {
+                const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
+                Value* exp = processExpression(oue->expr);
+                if(e->is<IR::Cmpl>()) 
+                    return Builder.CreateXor(exp,-1);
+
+                if(e->is<IR::Neg>())    
+                    return Builder.CreateSub(ConstantInt::get(exp->getType(),0), exp);
+
+                //if(e->is<IR::Not>())
+                    //Not required as statements are converted automatically to its negated form.
+                    //eg: !(a==b) is converted as a!=b by other passes.
+            }
+
+            if(e->is<IR::Constant>()) {  
+                const IR::Constant* c = e->to<IR::Constant>();
+                return ConstantInt::get(getCorrespondingType(typeMap->getType(c)),(c->value).get_si());
+            }
+
+            if(e->is<IR::PathExpression>()) {
+                cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();    
+                Value* v = st.lookupLocal("alloca_"+name);
+                assert(v != nullptr);
+                return Builder.CreateLoad(v);
+            }
+
+            if(e->is<IR::Operation_Binary>())   {
+                const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
+                Value* left; Value* right;
+                left = processExpression(obe->left);
+                
+                if(!(e->is<IR::LAnd>() || e->is<IR::LOr>()))    {
+                    right = processExpression(obe->right);
+                }
+
+                if(e->is<IR::Add>())    
+                    return Builder.CreateAdd(left,right);   
+
+                if(e->is<IR::Sub>())    
+                    return Builder.CreateSub(left,right);   
+
+                if(e->is<IR::Mul>())    
+                    return Builder.CreateMul(left,right);   
+
+                if(e->is<IR::Div>())    
+                    return Builder.CreateSDiv(left,right);  
+
+                if(e->is<IR::Mod>())
+                    return Builder.CreateSRem(left,right);  
+
+                if(e->is<IR::Shl>())
+                    return Builder.CreateShl(left,right);   
+
+                if(e->is<IR::Shr>())
+                    return Builder.CreateLShr(left,right);
+
+                if(e->is<IR::BAnd>())
+                    return Builder.CreateAnd(left,right);
+                
+                if(e->is<IR::BOr>())
+                    return Builder.CreateOr(left,right);
+
+                if(e->is<IR::BXor>())
+                    return Builder.CreateXor(left,right);
+
+                if(e->is<IR::LAnd>())   {
+                    BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.rhs", function);
+                    BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.end", function);
+                    
+                    Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
+                    Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+                    
+                    Builder.SetInsertPoint(bbTrue);
+                    BasicBlock* bbParent = bbTrue->getSinglePredecessor();
+                    assert(bbParent != nullptr);
+                    
+                    right = processExpression(obe->right);
+                    Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
+                    Builder.CreateBr(bbFalse);
+
+                    Builder.SetInsertPoint(bbFalse);
+                    PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
+                    phi->addIncoming(ConstantInt::getFalse(TheContext), bbParent);
+                    phi->addIncoming(icmp2, bbTrue);
+                    return phi;
+                }
+
+                if(e->is<IR::LOr>())    {
+                    BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.end", function);
+                    BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.rhs", function);
+                    
+                    Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
+                    Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+                    
+                    Builder.SetInsertPoint(bbFalse);
+                    BasicBlock* bbParent = bbFalse->getSinglePredecessor();
+                    assert(bbParent != nullptr);
+                    
+                    right = processExpression(obe->right);
+                    Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
+                    Builder.CreateBr(bbTrue);
+
+                    Builder.SetInsertPoint(bbTrue);
+                    PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
+                    phi->addIncoming(ConstantInt::getTrue(TheContext), bbParent);
+                    phi->addIncoming(icmp2, bbFalse);
+                    return phi;
+                }
+
+                if(e->is<IR::Operation_Relation>()) {
+                    if(obe->right->is<IR::Constant>())
+                        right = processExpression(obe->right);
+
+                    if(e->is<IR::Equ>())
+                        return Builder.CreateICmpEQ(left,right);
+
+                    if(e->is<IR::Neq>())    
+                        return Builder.CreateICmpNE(left,right);
+                        
+                    if(e->is<IR::Lss>())    
+                        return Builder.CreateICmpSLT(left,right);
+                    
+                    if(e->is<IR::Leq>())    
+                        return Builder.CreateICmpSLE(left,right);
+
+                    if(e->is<IR::Grt>())    
+                        return Builder.CreateICmpSGT(left,right);
+
+                    if(e->is<IR::Geq>())    
+                        return Builder.CreateICmpSGE(left,right);
+                }
+                    
+            }
+
+            /*if(e->is<IR::Operation_Ternary>())    {
+                const IR::Operation_Ternary* ote = e->to<IR::Operation_Ternary>();
+                Value* e0 = processExpression(ote->e0);
+                Value* e1 = processExpression(ote->e1);
+                Value* e2 = processExpression(ote->e2);
+                //if(e->is<IR::Mux>())
+                        //Not required as statements are converted automatically to if-else form by other passes.
+            }*/
+
+        }
+
+
 
     bool EmitLLVMIR::preorder(const IR::Type_StructLike* t)
     {
@@ -256,54 +446,6 @@ namespace P4	{
 
 
 
-    // bool EmitLLVMIR::preorder(const IR::P4Control* t)
-    // {
-    //     MYDEBUG(std::cout << t->type << std::endl;);
-    //     llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, "control_block", function);
-    //     Builder.SetInsertPoint(bbInsert);
-
-    //     return true; // why true and why false ? // Here true works 
-    // }
-
-
-
-
-
-
-    bool EmitLLVMIR::preorder(const IR::AssignmentStatement* t)
-    {
-        std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        llvm::Type* llvmType = nullptr;
-
-        if(t->left->is<IR::PathExpression>())   {
-            cstring name = refMap->getDeclaration(t->left->to<IR::PathExpression>()->path)->getName();
-            Value* v = st.lookupLocal("alloca_"+name);
-
-            // assert(v != nullptr);
-            if(v==nullptr)
-            {
-                return true;
-            }
-
-			llvmType = defined_type[typeMap->getType(t->left)->toString()];
-			assert(llvmType != nullptr);
-			Value* right = processExpression(t->right, llvmType);
-			if(right != nullptr)	{
-				//store 
-				Builder.CreateStore(right,v);			
-			}
-			
-		}
-
-		// else	{
-		// 	//To-Do
-		// }
-		// generateAssignmentStatements(t->left,t->right);
-        
-        return true;
-    }
-
-
 
 
     bool EmitLLVMIR::preorder(const IR::Type_Control* t)
@@ -314,6 +456,10 @@ namespace P4	{
         visit(t->applyParams);                   
         return true;
     }
+
+
+
+
     bool EmitLLVMIR::preorder(const IR::P4Control* t)
     {
         std::cout<<"\nP4Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
@@ -328,87 +474,19 @@ namespace P4	{
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	Value* EmitLLVMIR::processExpression(const IR::Expression* e, llvm::Type* type)	{
-		assert(e != nullptr);
-		assert(type != nullptr);
-		
-		llvm::Type* llvmType = nullptr;
-
-		if(e->is<IR::Constant>())   
-			return ConstantInt::get(type,(e->to<IR::Constant>()->value).get_si());
-
-		if(e->is<IR::PathExpression>())	{
-			cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();	
-			Value* v = st.lookupLocal("alloca_"+name);
-			assert(v != nullptr);
-			return Builder.CreateLoad(v);
-		}
-
-		if(e->is<IR::Operation_Binary>())	{
-			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
-			Value* left = processExpression(obe->left, type);
-			Value* right = processExpression(obe->right, type);
-
-			if(e->is<IR::Add>())	
-				return Builder.CreateAdd(left,right);	
-
-			if(e->is<IR::Sub>())	
-				return Builder.CreateSub(left,right);	
-
-			if(e->is<IR::Mul>())	
-				return Builder.CreateMul(left,right);	
-
-			if(e->is<IR::Div>())	
-				return Builder.CreateUDiv(left,right);	
-
-			if(e->is<IR::Mod>())
-				return Builder.CreateURem(left,right);	
-
-			if(e->is<IR::Shl>())
-				return Builder.CreateShl(left,right);	
-
-			if(e->is<IR::Shr>())
-				return Builder.CreateLShr(left,right);
-
-			if(e->is<IR::BAnd>())
-				return Builder.CreateAnd(left,right);
-			
-			if(e->is<IR::BOr>())
-				return Builder.CreateOr(left,right);
-
-			if(e->is<IR::BXor>())
-				return Builder.CreateXor(left,right);
-
-			if(e->is<IR::Operation_Relation>());
-				//To-Do
-		}
-
-		if(e->is<IR::Operation_Unary>())	{
-			//To-Do
-			// const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
-			// Value* exp = processExpression(oue->expr, type);
-
-			// if(e->is<IR::Neg>())
-			// 	return Builder.
-		}
-	}
+    ///// --> To do very big bit size 
+    unsigned EmitLLVMIR::getByteAlignment(unsigned width) {
+        if (width <= 8)
+            return 8;
+        else if (width <= 16)
+            return 16;
+        else if (width <= 32)
+            return 32;
+        else if (width <= 64)
+            return 64;
+        else
+            return 64; // compiled as u8* 
+    }
 
 
     // Helper Function
@@ -865,11 +943,6 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::SwitchStatement* t)
     {
         std::cout<<"\nSwitchStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
-    }
-    bool EmitLLVMIR::preorder(const IR::IfStatement* t)
-    {
-        std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
         return true;
     }
 

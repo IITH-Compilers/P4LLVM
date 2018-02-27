@@ -160,7 +160,7 @@ class EmitLLVMIR : public Inspector {
     // Helper Function (Declare them private)
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
-    llvm::Value* processExpression(const IR::Expression *e, llvm::Type* type);
+    llvm::Value* processExpression(const IR::Expression *e);
 
 
     // Visitor function
