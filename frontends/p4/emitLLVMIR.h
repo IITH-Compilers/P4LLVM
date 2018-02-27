@@ -238,7 +238,7 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::ExitStatement* t) {std::cout<<"\nExitStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
     bool preorder(const IR::SwitchCase* t) {std::cout<<"\nSwitchCase\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
     bool preorder(const IR::SwitchStatement* t) {std::cout<<"\nSwitchStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
-    bool preorder(const IR::IfStatement* t) {std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
+    bool preorder(const IR::IfStatement* t) override;//{std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;
 
     // misc
     bool preorder(const IR::Path* t) {std::cout<<"\nPath\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};;

@@ -189,6 +189,29 @@ namespace P4	{
         return true;
     }
 
+	bool EmitLLVMIR::preorder(const IR::IfStatement* t)	{
+		std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+		
+		Value* cond = processExpression(t->condition);
+		
+		BasicBlock* bbIf = BasicBlock::Create(TheContext, "if.then", function);
+		BasicBlock* bbElse = BasicBlock::Create(TheContext, "if.else", function);
+		BasicBlock* bbEnd = BasicBlock::Create(TheContext, "if.end", function);
+		
+		Builder.CreateCondBr(cond, bbIf, bbElse);
+
+		Builder.SetInsertPoint(bbIf);
+		visit(t->ifTrue);
+		Builder.CreateBr(bbEnd);
+
+		Builder.SetInsertPoint(bbElse);
+		visit(t->ifFalse);
+		Builder.CreateBr(bbEnd);
+
+		Builder.SetInsertPoint(bbEnd);
+		return true;
+	}
+
 	Value* EmitLLVMIR::processExpression(const IR::Expression* e)	{
 		assert(e != nullptr);
 
