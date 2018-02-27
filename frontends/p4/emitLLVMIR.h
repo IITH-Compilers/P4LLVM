@@ -154,7 +154,7 @@ class EmitLLVMIR : public Inspector {
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
 
-    llvm::Value* processExpression(const IR::Expression *e, llvm::Type* type);
+    llvm::Value* processExpression(const IR::Expression *e);
 
     bool preorder(const IR::Type_Boolean* t)  {std::cout<<"\nType_Boolean\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;}
     bool preorder(const IR::Type_Varbits* t) {std::cout<<"\nType_Varbits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;};

@@ -171,9 +171,11 @@ namespace P4	{
 			std::cout<<"t->left->tostring = "<<t->left->toString()<<"\n";
 			assert(llvmType != nullptr);
 
-			Value* right = processExpression(t->right, llvmType);
+			Value* right = processExpression(t->right);
 			
 			if(right != nullptr)	{
+				if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
+					right = Builder.CreateZExt(right, llvmType);
 				//store 
 				Builder.CreateStore(right,v);			
 			}
@@ -187,28 +189,27 @@ namespace P4	{
         return true;
     }
 
-	Value* EmitLLVMIR::processExpression(const IR::Expression* e, llvm::Type* type)	{
+	Value* EmitLLVMIR::processExpression(const IR::Expression* e)	{
 		assert(e != nullptr);
-		assert(type != nullptr);
-		
-		llvm::Type* llvmType = nullptr;
 
 		if(e->is<IR::Operation_Unary>())	{
 			const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
-			Value* exp = processExpression(oue->expr, type);
+			Value* exp = processExpression(oue->expr);
 			if(e->is<IR::Cmpl>()) 
 				return Builder.CreateXor(exp,-1);
 
 			if(e->is<IR::Neg>())	
-				return Builder.CreateSub(ConstantInt::get(type,0), exp);
+				return Builder.CreateSub(ConstantInt::get(exp->getType(),0), exp);
 
 			//if(e->is<IR::Not>())
 				//Not required as statements are converted automatically to its negated form.
 				//eg: !(a==b) is converted as a!=b by other passes.
 		}
 
-		if(e->is<IR::Constant>())   
-			return ConstantInt::get(type,(e->to<IR::Constant>()->value).get_si());
+		if(e->is<IR::Constant>()) {  
+			const IR::Constant* c = e->to<IR::Constant>();
+			return ConstantInt::get(getCorrespondingType(typeMap->getType(c)),(c->value).get_si());
+		}
 
 		if(e->is<IR::PathExpression>())	{
 			cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();	
@@ -220,10 +221,10 @@ namespace P4	{
 		if(e->is<IR::Operation_Binary>())	{
 			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
 			Value* left; Value* right;
-			left = processExpression(obe->left, type);
+			left = processExpression(obe->left);
 			
 			if(!(e->is<IR::LAnd>() || e->is<IR::LOr>()))	{
-				right = processExpression(obe->right, type);
+				right = processExpression(obe->right);
 			}
 
 			if(e->is<IR::Add>())	
@@ -260,70 +261,82 @@ namespace P4	{
 	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.rhs", function);
 	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.end", function);
 				
-				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(type,0));
+				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
 				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
 		        
 				Builder.SetInsertPoint(bbTrue);
 				BasicBlock* bbParent = bbTrue->getSinglePredecessor();
 				assert(bbParent != nullptr);
 				
-				right = processExpression(obe->right, type);
-				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(type,0));
+				right = processExpression(obe->right);
+				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
 				Builder.CreateBr(bbFalse);
 
 				Builder.SetInsertPoint(bbFalse);
 				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
 				phi->addIncoming(ConstantInt::getFalse(TheContext), bbParent);
 				phi->addIncoming(icmp2, bbTrue);
-				return Builder.CreateZExt(phi, type);
+				return phi;
 			}
 
 			if(e->is<IR::LOr>())	{
 	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.end", function);
 	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.rhs", function);
 				
-				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(type,0));
+				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
 				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
 		        
 				Builder.SetInsertPoint(bbFalse);
 				BasicBlock* bbParent = bbFalse->getSinglePredecessor();
 				assert(bbParent != nullptr);
 				
-				right = processExpression(obe->right, type);
-				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(type,0));
+				right = processExpression(obe->right);
+				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
 				Builder.CreateBr(bbTrue);
 
 				Builder.SetInsertPoint(bbTrue);
 				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
 				phi->addIncoming(ConstantInt::getTrue(TheContext), bbParent);
 				phi->addIncoming(icmp2, bbFalse);
-				return Builder.CreateZExt(phi, type);
+				return phi;
 			}
 
 			if(e->is<IR::Operation_Relation>())	{
 				if(obe->right->is<IR::Constant>())
-					right = processExpression(obe->right, defined_type[typeMap->getType(obe->left)->toString()]);
+					right = processExpression(obe->right);
 
 				if(e->is<IR::Equ>())
-					return Builder.CreateZExt(Builder.CreateICmpEQ(left,right), type);
+					return Builder.CreateICmpEQ(left,right);
 
 				if(e->is<IR::Neq>())	
-					return Builder.CreateZExt(Builder.CreateICmpNE(left,right), type);
+					return Builder.CreateICmpNE(left,right);
 					
 				if(e->is<IR::Lss>())	
-					return Builder.CreateZExt(Builder.CreateICmpSLT(left,right), type);
+					return Builder.CreateICmpSLT(left,right);
 				
 				if(e->is<IR::Leq>())	
-					return Builder.CreateZExt(Builder.CreateICmpSLE(left,right), type);
+					return Builder.CreateICmpSLE(left,right);
 
 				if(e->is<IR::Grt>())	
-					return Builder.CreateZExt(Builder.CreateICmpSGT(left,right), type);
+					return Builder.CreateICmpSGT(left,right);
 
 				if(e->is<IR::Geq>())	
-					return Builder.CreateZExt(Builder.CreateICmpSGE(left,right), type);
+					return Builder.CreateICmpSGE(left,right);
 			}
 				
 		}
+
+		/*if(e->is<IR::Operation_Ternary>())    {
+			const IR::Operation_Ternary* ote = e->to<IR::Operation_Ternary>();
+			Value* e0 = processExpression(ote->e0);
+			Value* e1 = processExpression(ote->e1);
+			Value* e2 = processExpression(ote->e2);
+
+			//if(e->is<IR::Mux>())
+					//Not required as statements are converted automatically to if-else form by other passes.
+
+		}*/
+
 	}
 
 
