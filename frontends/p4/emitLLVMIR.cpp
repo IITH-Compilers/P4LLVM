@@ -296,7 +296,7 @@ namespace P4	{
 				Builder.SetInsertPoint(bbTrue);
 				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
 				phi->addIncoming(ConstantInt::getTrue(TheContext), bbParent);
-				phi->addIncoming(icmp2, bbTrue);
+				phi->addIncoming(icmp2, bbFalse);
 				return Builder.CreateZExt(phi, type);
 			}
 
