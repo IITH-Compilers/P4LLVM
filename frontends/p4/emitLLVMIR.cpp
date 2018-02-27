@@ -198,6 +198,13 @@ namespace P4	{
 			Value* exp = processExpression(oue->expr, type);
 			if(e->is<IR::Cmpl>()) 
 				return Builder.CreateXor(exp,-1);
+
+			if(e->is<IR::Neg>())	
+				return Builder.CreateSub(ConstantInt::get(type,0), exp);
+
+			//if(e->is<IR::Not>())
+				//Not required as statements are converted automatically to its negated form.
+				//eg: !(a==b) is converted as a!=b by other passes.
 		}
 
 		if(e->is<IR::Constant>())   
