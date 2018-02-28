@@ -160,7 +160,8 @@ class EmitLLVMIR : public Inspector {
     // Helper Function (Declare them private)
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
-    llvm::Value* processExpression(const IR::Expression *e, llvm::Type* type);
+
+    llvm::Value* processExpression(const IR::Expression *e);
 
 
     // Visitor function
@@ -265,36 +266,6 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::Vector<IR::Type>* t) override;
     bool preorder(const IR::IndexedVector<IR::StatOrDecl>* t) override;
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }  // namespace P4
 #endif
 #endif /* _FRONTENDS_P4_LLVMIR_H_ */

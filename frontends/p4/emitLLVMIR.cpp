@@ -27,11 +27,9 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::Declaration_Variable* t)
     {
 	    AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
-    	st.insert("alloca_"+t->getName(),alloca);
-		// std::cout<<"t->name.name = "<< t->name.name << "t->name = "<<t->name<<"\nt->getname = "<<t->getName()<<"\n t->tostring() = "<<t->toString()<<"\n ";
-		// std::cout<<" t->externalName() = "<<t->externalName()<<"\n  t->getName().name-> = "<<t->getName().name<<"\n   t->controlplanename-> = "<<t->controlPlaneName()<<"\n ";		
-    	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
+    	st.insert("alloca_"+t->getName(),alloca);		
+    	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;
+    	return true;
     }
 
     bool EmitLLVMIR::preorder(const IR::Type_StructLike* t)
@@ -287,8 +285,12 @@ namespace P4	{
 
 			llvmType = defined_type[typeMap->getType(t->left)->toString()];
 			assert(llvmType != nullptr);
-			Value* right = processExpression(t->right, llvmType);
+
+			Value* right = processExpression(t->right);
+			
 			if(right != nullptr)	{
+				if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
+					right = Builder.CreateZExt(right, llvmType);
 				//store 
 				Builder.CreateStore(right,v);			
 			}
@@ -298,7 +300,6 @@ namespace P4	{
 		// else	{
 		// 	//To-Do
 		// }
-		// generateAssignmentStatements(t->left,t->right);
         
         return true;
     }
@@ -324,35 +325,50 @@ namespace P4	{
         return true;
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	Value* EmitLLVMIR::processExpression(const IR::Expression* e, llvm::Type* type)	{
-		assert(e != nullptr);
-		assert(type != nullptr);
+	bool EmitLLVMIR::preorder(const IR::IfStatement* t)	{
+		std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
 		
-		llvm::Type* llvmType = nullptr;
+		Value* cond = processExpression(t->condition);
+		
+		BasicBlock* bbIf = BasicBlock::Create(TheContext, "if.then", function);
+		BasicBlock* bbElse = BasicBlock::Create(TheContext, "if.else", function);
+		BasicBlock* bbEnd = BasicBlock::Create(TheContext, "if.end", function);
+		
+		Builder.CreateCondBr(cond, bbIf, bbElse);
 
-		if(e->is<IR::Constant>())   
-			return ConstantInt::get(type,(e->to<IR::Constant>()->value).get_si());
+		Builder.SetInsertPoint(bbIf);
+		visit(t->ifTrue);
+		Builder.CreateBr(bbEnd);
+
+		Builder.SetInsertPoint(bbElse);
+		visit(t->ifFalse);
+		Builder.CreateBr(bbEnd);
+
+		Builder.SetInsertPoint(bbEnd);
+		return true;
+	}
+
+	Value* EmitLLVMIR::processExpression(const IR::Expression* e)	{
+		assert(e != nullptr);
+
+		if(e->is<IR::Operation_Unary>())	{
+			const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
+			Value* exp = processExpression(oue->expr);
+			if(e->is<IR::Cmpl>()) 
+				return Builder.CreateXor(exp,-1);
+
+			if(e->is<IR::Neg>())	
+				return Builder.CreateSub(ConstantInt::get(exp->getType(),0), exp);
+
+			//if(e->is<IR::Not>())
+				//Not required as statements are converted automatically to its negated form.
+				//eg: !(a==b) is converted as a!=b by other passes.
+		}
+
+		if(e->is<IR::Constant>()) {  
+			const IR::Constant* c = e->to<IR::Constant>();
+			return ConstantInt::get(getCorrespondingType(typeMap->getType(c)),(c->value).get_si());
+		}
 
 		if(e->is<IR::PathExpression>())	{
 			cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();	
@@ -363,8 +379,12 @@ namespace P4	{
 
 		if(e->is<IR::Operation_Binary>())	{
 			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
-			Value* left = processExpression(obe->left, type);
-			Value* right = processExpression(obe->right, type);
+			Value* left; Value* right;
+			left = processExpression(obe->left);
+			
+			if(!(e->is<IR::LAnd>() || e->is<IR::LOr>()))	{
+				right = processExpression(obe->right);
+			}
 
 			if(e->is<IR::Add>())	
 				return Builder.CreateAdd(left,right);	
@@ -376,10 +396,10 @@ namespace P4	{
 				return Builder.CreateMul(left,right);	
 
 			if(e->is<IR::Div>())	
-				return Builder.CreateUDiv(left,right);	
+				return Builder.CreateSDiv(left,right);	
 
 			if(e->is<IR::Mod>())
-				return Builder.CreateURem(left,right);	
+				return Builder.CreateSRem(left,right);	
 
 			if(e->is<IR::Shl>())
 				return Builder.CreateShl(left,right);	
@@ -396,18 +416,86 @@ namespace P4	{
 			if(e->is<IR::BXor>())
 				return Builder.CreateXor(left,right);
 
-			if(e->is<IR::Operation_Relation>());
-				//To-Do
+			if(e->is<IR::LAnd>())	{
+	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.rhs", function);
+	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.end", function);
+				
+				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
+				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+		        
+				Builder.SetInsertPoint(bbTrue);
+				BasicBlock* bbParent = bbTrue->getSinglePredecessor();
+				assert(bbParent != nullptr);
+				
+				right = processExpression(obe->right);
+				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
+				Builder.CreateBr(bbFalse);
+
+				Builder.SetInsertPoint(bbFalse);
+				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
+				phi->addIncoming(ConstantInt::getFalse(TheContext), bbParent);
+				phi->addIncoming(icmp2, bbTrue);
+				return phi;
+			}
+
+			if(e->is<IR::LOr>())	{
+	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.end", function);
+	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.rhs", function);
+				
+				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
+				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+		        
+				Builder.SetInsertPoint(bbFalse);
+				BasicBlock* bbParent = bbFalse->getSinglePredecessor();
+				assert(bbParent != nullptr);
+				
+				right = processExpression(obe->right);
+				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
+				Builder.CreateBr(bbTrue);
+
+				Builder.SetInsertPoint(bbTrue);
+				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
+				phi->addIncoming(ConstantInt::getTrue(TheContext), bbParent);
+				phi->addIncoming(icmp2, bbFalse);
+				return phi;
+			}
+
+			if(e->is<IR::Operation_Relation>())	{
+				if(obe->right->is<IR::Constant>())
+					right = processExpression(obe->right);
+
+				if(e->is<IR::Equ>())
+					return Builder.CreateICmpEQ(left,right);
+
+				if(e->is<IR::Neq>())	
+					return Builder.CreateICmpNE(left,right);
+					
+				if(e->is<IR::Lss>())	
+					return Builder.CreateICmpSLT(left,right);
+				
+				if(e->is<IR::Leq>())	
+					return Builder.CreateICmpSLE(left,right);
+
+				if(e->is<IR::Grt>())	
+					return Builder.CreateICmpSGT(left,right);
+
+				if(e->is<IR::Geq>())	
+					return Builder.CreateICmpSGE(left,right);
+			}
+				
 		}
 
-		if(e->is<IR::Operation_Unary>())	{
-			//To-Do
-			// const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
-			// Value* exp = processExpression(oue->expr, type);
+		/*if(e->is<IR::Operation_Ternary>())    {
+			const IR::Operation_Ternary* ote = e->to<IR::Operation_Ternary>();
+			Value* e0 = processExpression(ote->e0);
+			Value* e1 = processExpression(ote->e1);
+			Value* e2 = processExpression(ote->e2);
 
-			// if(e->is<IR::Neg>())
-			// 	return Builder.
-		}
+			//if(e->is<IR::Mux>())
+					//Not required as statements are converted automatically to if-else form by other passes.
+
+		}*/
+
 	}
 
 
@@ -575,26 +663,6 @@ namespace P4	{
 		MYDEBUG(std::cout << "Returning Int32 pointer for Incomplete Type" << std::endl;)
     	return(Type::getInt32PtrTy(TheContext));
 	}
-
-    // void buildStoreInst(Type* type, Type* oldType=nullptr)    {
-    //     switch(type->getTypeID())  {
-    //         case Type::TypeID::IntegerTyID :
-    //             if(oldType != nullptr && oldType->getTypeID()==Type::TypeID::ArrayTyID && oldType->get)  {
-
-    //             }
-
-    //             Builder.CreateStore(ConstantInt::get(type,(con_literal->value).get_ui()),v);                
-    //             std::cout<<"found type to be integer - "<<type->getIntegerBitWidth()<<std::endl;
-    //         case Type::TypeID::ArrayTyID :
-    //             if(type->getArrayNumElements() == 1)
-    //             // buildStoreInst
-
-
-    //     }
-    // }
-
-
-
     #define VECTOR_VISIT(V, T, SS)                                                      \
         bool EmitLLVMIR::preorder(const IR:: V <IR::T> *v){                             \
         std::cout<<"\n" << SS << "\t "<<*v<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";   \
@@ -958,7 +1026,4 @@ namespace P4	{
         return true;
         
     }
-        
-
-
 }
