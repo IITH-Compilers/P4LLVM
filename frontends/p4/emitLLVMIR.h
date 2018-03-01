@@ -161,7 +161,7 @@ class EmitLLVMIR : public Inspector {
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
 
-    llvm::Value* processExpression(const IR::Expression *e);
+    llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr);
 
 
     // Visitor function

@@ -328,12 +328,16 @@ namespace P4	{
 	bool EmitLLVMIR::preorder(const IR::IfStatement* t)	{
 		std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
 		
-		Value* cond = processExpression(t->condition);
-		
 		BasicBlock* bbIf = BasicBlock::Create(TheContext, "if.then", function);
 		BasicBlock* bbElse = BasicBlock::Create(TheContext, "if.else", function);
+		Value* cond = processExpression(t->condition, bbIf, bbElse);
 		BasicBlock* bbEnd = BasicBlock::Create(TheContext, "if.end", function);
 		
+		//To handle cases like if(a){//dosomething;}
+		//Here 'a' is a PathExpression which would return a LoadInst on processing
+		if(isa<LoadInst>(cond))	
+			cond = Builder.CreateICmpEQ(cond, ConstantInt::get(cond->getType(),1));
+
 		Builder.CreateCondBr(cond, bbIf, bbElse);
 
 		Builder.SetInsertPoint(bbIf);
@@ -348,27 +352,31 @@ namespace P4	{
 		return true;
 	}
 
-	Value* EmitLLVMIR::processExpression(const IR::Expression* e)	{
+	Value* EmitLLVMIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullptr*/, BasicBlock* bbElse/*=nullptr*/)	{
 		assert(e != nullptr);
 
 		if(e->is<IR::Operation_Unary>())	{
 			const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
-			Value* exp = processExpression(oue->expr);
+			Value* exp = processExpression(oue->expr, bbIf, bbElse);
 			if(e->is<IR::Cmpl>()) 
 				return Builder.CreateXor(exp,-1);
 
 			if(e->is<IR::Neg>())	
 				return Builder.CreateSub(ConstantInt::get(exp->getType(),0), exp);
 
-			//if(e->is<IR::Not>())
-				//Not required as statements are converted automatically to its negated form.
-				//eg: !(a==b) is converted as a!=b by other passes.
+			if(e->is<IR::LNot>())
+				return Builder.CreateICmpEQ(exp, ConstantInt::get(exp->getType(),0));
+		}
+		if(e->is<IR::BoolLiteral>())	{
+			const IR::BoolLiteral* c = e->to<IR::BoolLiteral>();			
+			return ConstantInt::get(getCorrespondingType(typeMap->getType(c)),c->value);			
 		}
 
 		if(e->is<IR::Constant>()) {  
 			const IR::Constant* c = e->to<IR::Constant>();
 			return ConstantInt::get(getCorrespondingType(typeMap->getType(c)),(c->value).get_si());
 		}
+
 
 		if(e->is<IR::PathExpression>())	{
 			cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();	
@@ -380,10 +388,10 @@ namespace P4	{
 		if(e->is<IR::Operation_Binary>())	{
 			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
 			Value* left; Value* right;
-			left = processExpression(obe->left);
+			left = processExpression(obe->left, bbIf, bbElse);
 			
 			if(!(e->is<IR::LAnd>() || e->is<IR::LOr>()))	{
-				right = processExpression(obe->right);
+				right = processExpression(obe->right, bbIf, bbElse);
 			}
 
 			if(e->is<IR::Add>())	
@@ -417,41 +425,74 @@ namespace P4	{
 				return Builder.CreateXor(left,right);
 
 			if(e->is<IR::LAnd>())	{
-	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.rhs", function);
-	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.end", function);
+	            BasicBlock* bbNext = BasicBlock::Create(TheContext, "land.rhs", function);								
+	            BasicBlock* bbEnd;
 				
-				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
-				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+				Value* icmp1;
+				Value* icmp2;
+
+				if(obe->left->is<IR::PathExpression>())	{
+					icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
+					bbEnd = BasicBlock::Create(TheContext, "land.end", function);
+					Builder.CreateCondBr(icmp1, bbNext, bbEnd);				
+				}
+				else	{
+					assert(bbElse != nullptr);
+					icmp1 = left;
+					Builder.CreateCondBr(icmp1, bbNext, bbElse);
+				}
 		        
-				Builder.SetInsertPoint(bbTrue);
-				BasicBlock* bbParent = bbTrue->getSinglePredecessor();
+				Builder.SetInsertPoint(bbNext);
+				BasicBlock* bbParent = bbNext->getSinglePredecessor();
 				assert(bbParent != nullptr);
 				
-				right = processExpression(obe->right);
-				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
-				Builder.CreateBr(bbFalse);
+				right = processExpression(obe->right, bbIf, bbElse);
+				if(obe->right->is<IR::PathExpression>())	{
+					icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));	
+					Builder.CreateBr(bbEnd);
+				}
+				else	{
+					icmp2 = right;
+					return icmp2;		
+				}
 
-				Builder.SetInsertPoint(bbFalse);
+				Builder.SetInsertPoint(bbEnd);
 				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
 				phi->addIncoming(ConstantInt::getFalse(TheContext), bbParent);
-				phi->addIncoming(icmp2, bbTrue);
+				phi->addIncoming(icmp2, bbNext);
 				return phi;
 			}
 
 			if(e->is<IR::LOr>())	{
-	            BasicBlock* bbTrue = BasicBlock::Create(TheContext, "land.end", function);
+	            BasicBlock* bbTrue;
 	            BasicBlock* bbFalse = BasicBlock::Create(TheContext, "land.rhs", function);
 				
-				Value* icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
-				Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
-		        
+				Value* icmp1;
+				Value* icmp2;
+				
+				if(obe->left->is<IR::PathExpression>())	{
+					bbTrue = BasicBlock::Create(TheContext, "land.end", function);
+					icmp1 = Builder.CreateICmpNE(left,ConstantInt::get(left->getType(),0));
+					Builder.CreateCondBr(icmp1, bbTrue, bbFalse);
+				}
+				else	{
+					assert(bbIf != nullptr);
+					icmp1 = left;
+					Builder.CreateCondBr(icmp1, bbIf, bbFalse);
+				}
 				Builder.SetInsertPoint(bbFalse);
 				BasicBlock* bbParent = bbFalse->getSinglePredecessor();
 				assert(bbParent != nullptr);
 				
-				right = processExpression(obe->right);
-				Value* icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
-				Builder.CreateBr(bbTrue);
+				right = processExpression(obe->right, bbIf, bbElse);
+				if(obe->right->is<IR::PathExpression>())	{				
+					icmp2 = Builder.CreateICmpNE(right,ConstantInt::get(right->getType(),0));
+					Builder.CreateBr(bbTrue);
+				}
+				else	{
+					icmp2 = right;
+					return icmp2;
+				}
 
 				Builder.SetInsertPoint(bbTrue);
 				PHINode* phi = Builder.CreatePHI(icmp1->getType(), 2);
@@ -462,7 +503,7 @@ namespace P4	{
 
 			if(e->is<IR::Operation_Relation>())	{
 				if(obe->right->is<IR::Constant>())
-					right = processExpression(obe->right);
+					right = processExpression(obe->right, bbIf, bbElse);
 
 				if(e->is<IR::Equ>())
 					return Builder.CreateICmpEQ(left,right);
@@ -933,11 +974,6 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::SwitchStatement* t)
     {
         std::cout<<"\nSwitchStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
-    }
-    bool EmitLLVMIR::preorder(const IR::IfStatement* t)
-    {
-        std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
         return true;
     }
 
