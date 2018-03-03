@@ -909,13 +909,54 @@ namespace P4	{
     }
     bool EmitLLVMIR::preorder(const IR::SelectCase* t)
     {
+        //handled inside SelectExpression
         std::cout<<"\nSelectCase\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
         return true;
     }
     bool EmitLLVMIR::preorder(const IR::SelectExpression* t)
     {
         std::cout<<"\nSelectExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
+        
+        //right now, only supports single key based select. and cases are allowed only on integer constant expressions
+        /*
+        if (defined_state.find("start") == defined_state.end()) {
+            defined_state["start"] = BasicBlock::Create(TheContext, "start", function);
+        }
+        */
+        if (defined_state.find("reject") == defined_state.end()) {
+            defined_state["reject"] = BasicBlock::Create(TheContext, "reject", function);
+        }
+
+        SwitchInst *sw = Builder.CreateSwitch(processExpression(t->select,NULL,NULL), defined_state["reject"], t->selectCases.size());
+        //comment above line and uncomment below commented code to test selectexpression with dummy select key
+        /*
+        Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
+        SwitchInst *sw = Builder.CreateSwitch(tmp, defined_state["reject"], t->selectCases.size());
+        */
+
+        bool issetdefault = false;
+        for (int i=0;i<t->selectCases.size();i++) {
+            //visit(t->selectCases[i]);
+            if (dynamic_cast<const IR::DefaultExpression *>(t->selectCases[i]->keyset)) {
+                if (issetdefault) continue;
+                else {
+                    issetdefault = true;
+                    if (defined_state.find(t->selectCases[i]->state->path->asString()) == defined_state.end()) {
+                        defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, *new const Twine(t->selectCases[i]->state->path->asString()), function);
+                    }
+                    sw->setDefaultDest(defined_state[t->selectCases[i]->state->path->asString()]);
+                }
+            }
+            else if (dynamic_cast<const IR::Constant *>(t->selectCases[i]->keyset)) {
+                if (defined_state.find(t->selectCases[i]->state->path->asString()) == defined_state.end()) {
+                    defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, *new const Twine(t->selectCases[i]->state->path->asString()), function);
+                }
+                ConstantInt *onVal = ConstantInt::get(IntegerType::get(TheContext, 64), ((IR::Constant *)(t->selectCases[i]->keyset))->asLong(), true);
+
+                sw->addCase(onVal, defined_state[t->selectCases[i]->state->path->asString()]);
+            }
+        }
+        return false;
     }
     bool EmitLLVMIR::preorder(const IR::ListExpression* t)
     {
