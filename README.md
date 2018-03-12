@@ -1,7 +1,8 @@
 # P4 ➡ LLVM
 P4lang is an LLVM front-end for P4, a networking language.
 
-This project is built upon open-source P4 compiler called [p4c](https://github.com/p4lang/p4c). The LLVM IR emitter is a pass over p4c IR. We reuse the p4c front-end and translate P4 IR to LLVM IR.
+This project is built upon open-source P4 compiler called [p4c](https://github.com/p4lang/p4c).
+The LLVM IR emitter is a pass over p4c IR. We reuse the p4c front-end and translate p4c IR to LLVM IR.
 
 ![Image](images/blockdiagram.png)
 ## Getting started
@@ -16,7 +17,7 @@ Either do `make install` after `make` or export the path of llvm binaries.
 
 Clone the P4lang repository. It includes submodules, so be sure to use --recursive to pull them in:
 
-`git clone --recursive https://github.com/p4lang/p4c.git`
+`git clone --recursive https://github.com/IITH-Compilers/p4lang.git`
 
 If you forget to use `--recursive`, you can update the submodules at any time using:
 
