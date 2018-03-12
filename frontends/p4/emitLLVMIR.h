@@ -33,7 +33,7 @@
 
 using namespace llvm;
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 #if VERBOSE
 #ifndef MYDEBUG
