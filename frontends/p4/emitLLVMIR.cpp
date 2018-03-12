@@ -283,13 +283,10 @@ namespace P4	{
                 visit(a); // visits Type_Var
                 // AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
                 // st.insert("alloca_"+t->getName(),alloca);
-
-
             }
         }
         return true;
     }
-
 
     bool EmitLLVMIR::preorder(const IR::Type_Var* t)
     {
@@ -304,15 +301,10 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::P4Parser* t)
     {
         std::cout<<"\nTP4Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-
-
         visit(t->type); // visits type_parser
-
         if (t->constructorParams->size() != 0) 
             visit(t->constructorParams); //visits Vector -> ParameterList
-
         visit(&t->parserLocals); // visits Vector -> Declaration 
-
         //Declare basis block for each state
         for (auto s : t->states)  
         {

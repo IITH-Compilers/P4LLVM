@@ -146,7 +146,6 @@ class EmitLLVMIR : public Inspector {
         
         bbInsert = BasicBlock::Create(TheContext, "entry", function);
         Builder.SetInsertPoint(bbInsert);
-        std::ostream& opStream = *openFile(fileName+".ll", true);
         setName("EmitLLVMIR");
     }
     ~EmitLLVMIR () {
