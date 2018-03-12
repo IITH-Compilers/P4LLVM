@@ -5,10 +5,6 @@
 #include "llvm/IR/DerivedTypes.h"
 
 namespace P4	{
-
-
-
-
 	///// --> To do very big bit size 
     unsigned EmitLLVMIR::getByteAlignment(unsigned width) {
     	if (width <= 8)
@@ -28,13 +24,13 @@ namespace P4	{
     {
 	    AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
     	st.insert("alloca_"+t->getName(),alloca);		
-    	std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";return true;
+    	MYDEBUG(std::cout<<"\nDeclaration_Variable\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
     	return true;
     }
 
     bool EmitLLVMIR::preorder(const IR::Type_StructLike* t)
     {
-    	std::cout<<"\nType_StructLike\t "<<*t << "\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+    	MYDEBUG(std::cout<<"\nType_StructLike\t "<<*t << "\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
     	auto z = defined_type[t->externalName()];
     	if(z)
     	{
@@ -55,13 +51,9 @@ namespace P4	{
     	return true;
     }
 
-
-
-
     bool EmitLLVMIR::preorder(const IR::Type_Extern* t)
     {
-        std::cout<<"\nType_Extern\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-           
+        MYDEBUG(std::cout<<"\nType_Extern\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)   
         // typeParameters --> parameters
         // getDeclarations --> Declarations
         visit(t->typeParameters);
@@ -71,21 +63,20 @@ namespace P4	{
 
     bool EmitLLVMIR::preorder(const IR::ParameterList* t)
     {
-        std::cout<<"\nParameterList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nParameterList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         for (auto param : *t->getEnumerator())
         {
-            std::cout << "flag2: " << param << std::endl;
+            MYDEBUG(std::cout << "flag2: " << param << std::endl;)
             visit(param); // visits parameter
         }
         return true;
     }
 
-
     // TODO - Pass by Reference when direction is out/inout
     bool EmitLLVMIR::preorder(const IR::Parameter* t)
     {
-        std::cout<<"\nParameterX\t "<<*t << " | " << "Type = " << t->type  << "||" << typeMap->getType(t) << "\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        // std::cout << "FLAG : " <<  << std::endl;
+        MYDEBUG(std::cout<<"\nParameterX\t "<<*t << " | " << "Type = " << t->type  << "||" << typeMap->getType(t) << "\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        // MYDEBUG(std::cout << "FLAG : " <<  << std::endl;)
         visit(t->annotations);
         AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(t->type));
         st.insert("alloca_"+t->getName(),alloca);
@@ -118,7 +109,7 @@ namespace P4	{
     // To Check
     bool EmitLLVMIR::preorder(const IR::TypeParameters* t) // type of method?
     {
-        std::cout<<"\nTypeParameters\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nTypeParameters\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
 
         if (!t->empty())
         {
@@ -127,8 +118,6 @@ namespace P4	{
                 visit(a); // visits Type_Var
                 // AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(typeMap->getType(t)));
                 // st.insert("alloca_"+t->getName(),alloca);
-
-
             }
         }
         return true;
@@ -139,7 +128,7 @@ namespace P4	{
     {
         // t->getVarName()
         // t->getP4Type()
-        std::cout<<"\nType_Var\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Var\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
@@ -147,9 +136,7 @@ namespace P4	{
     // Completed
     bool EmitLLVMIR::preorder(const IR::P4Parser* t)
     {
-        std::cout<<"\nTP4Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-
-
+        MYDEBUG(std::cout<<"\nTP4Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         visit(t->type); // visits type_parser
 
         if (t->constructorParams->size() != 0) 
@@ -162,7 +149,7 @@ namespace P4	{
         {
             llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, std::string(s->name.name), function);
             defined_state[s->name.name] = bbInsert;
-            MYDEBUG(std::cout << s->name.name << std::endl;);
+            MYDEBUG(std::cout << s->name.name << std::endl;)
         }
 
         // visit all states
@@ -181,8 +168,7 @@ namespace P4	{
     // To check for bugs after 
     bool EmitLLVMIR::preorder(const IR::ParserState* parserState)
     {
-        std::cout<<"\nParserState\t "<<*parserState<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        
+        MYDEBUG(std::cout<<"\nParserState\t "<<*parserState<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
 
         if(parserState->name == "start")
         {
@@ -245,14 +231,12 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::Type_Parser* t)
     {
         // auto pl = t->applyParams;
-        std::cout<<"\nType_Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         visit(t->annotations);
         visit(t->typeParameters);    // visits TypeParameters
         visit(t->applyParams);       // visits ParameterList
         return true;
     }
-
-
 
     // bool EmitLLVMIR::preorder(const IR::P4Control* t)
     // {
@@ -263,14 +247,9 @@ namespace P4	{
     //     return true; // why true and why false ? // Here true works 
     // }
 
-
-
-
-
-
     bool EmitLLVMIR::preorder(const IR::AssignmentStatement* t)
     {
-        std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nAssignmentStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         llvm::Type* llvmType = nullptr;
 
         if(t->left->is<IR::PathExpression>())   {
@@ -304,20 +283,18 @@ namespace P4	{
         return true;
     }
 
-
-
-
     bool EmitLLVMIR::preorder(const IR::Type_Control* t)
     {
-        std::cout<<"\nType_Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         visit(t->annotations);
         visit(t->typeParameters);
         visit(t->applyParams);                   
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::P4Control* t)
     {
-        std::cout<<"\nP4Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nP4Control\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         visit(t->type); // visits Type_Control
         visit(t->constructorParams); // ParameterList
         visit(&t->controlLocals); //IndexedVector<Declaration>
@@ -326,7 +303,7 @@ namespace P4	{
     }
 
 	bool EmitLLVMIR::preorder(const IR::IfStatement* t)	{
-		std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+		MYDEBUG(std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
 		
 		BasicBlock* bbIf = BasicBlock::Create(TheContext, "if.then", function);
 		BasicBlock* bbElse = BasicBlock::Create(TheContext, "if.else", function);
@@ -543,12 +520,9 @@ namespace P4	{
     // Helper Function
     llvm::Type* EmitLLVMIR::getCorrespondingType(const IR::Type *t)
     {
-
-
         // Type_Name
         // Type_Enum
-
-        std::cout << __LINE__ << std::endl;
+        MYDEBUG(std::cout << __LINE__ << std::endl;)
         if(!t)
         {
             return nullptr;
@@ -563,7 +537,7 @@ namespace P4	{
     	// if int<> or bit<> /// bit<32> x; /// The type of x is Type_Bits(32); /// The type of 'bit<32>' is Type_Type(Type_Bits(32))
     	else if(t->is<IR::Type_Bits>()) // Bot int <> and bit<> passes this check
     	{
-            std::cout << __LINE__ << std::endl;
+            MYDEBUG(std::cout << __LINE__ << std::endl;)
     		const IR::Type_Bits *x =  dynamic_cast<const IR::Type_Bits *>(t);
     		
     		int width = x->width_bits(); // false
@@ -584,7 +558,7 @@ namespace P4	{
 
     	else if (t->is<IR::Type_StructLike>()) 
     	{
-            std::cout << __LINE__ << std::endl;
+            MYDEBUG(std::cout << __LINE__ << std::endl;)
             // Just a bug check
     		if (!t->is<IR::Type_Struct>() && !t->is<IR::Type_Header>() && !t->is<IR::Type_HeaderUnion>())
     		{
@@ -622,17 +596,17 @@ namespace P4	{
     	// c++ equal => typedef struct x x --> As far as i understood
         else if(t->is<IR::Type_Typedef>())
         {
-            std::cout << __LINE__ << std::endl;
+            MYDEBUG(std::cout << __LINE__ << std::endl;)
             // MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
             const IR::Type_Typedef *x = dynamic_cast<const IR::Type_Typedef *>(t);
             return(getCorrespondingType(x->type)); 
         }
 		else if(t->is<IR::Type_Name>())
 		{
-            std::cout << __LINE__ << std::endl;
+            MYDEBUG(std::cout << __LINE__ << std::endl;)
 			if(defined_type[t->toString()])
 			{
-                std::cout << __LINE__ << std::endl;
+                MYDEBUG(std::cout << __LINE__ << std::endl;)
 				return(defined_type[t->toString()]);
 			}
 			// llvm::Type *temp = llvm::StructType::create(TheContext, "struct." + std::string(t->toString()));
@@ -641,72 +615,99 @@ namespace P4	{
             CHECK_NULL(typeMap);
             auto canon = typeMap->getTypeType(t, true);
             // auto canon = typeMap->getType(t);
-            std::cout << __LINE__ << std::endl;
+            MYDEBUG(std::cout << __LINE__ << std::endl;)
             defined_type[t->toString()] = getCorrespondingType(canon);
-            std::cout << canon << ":" << defined_type[t->toString()] << std::endl;
+            MYDEBUG(std::cout << canon << ":" << defined_type[t->toString()] << std::endl;)
             return (defined_type[t->toString()]);
 		}
     	else if(t->is<IR::Type_Tuple>())
     	{
-            std::cout << __LINE__ << std::endl;
-    		MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)	
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+    		    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )	
     	}
 		else if(t->is<IR::Type_Void>())
 		{
-            std::cout << __LINE__ << std::endl;
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
 		}
 		else if(t->is<IR::Type_Set>())
 		{
-            std::cout << __LINE__ << std::endl;
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
 		}
 		else if(t->is<IR::Type_Stack>())
-		{std::cout << __LINE__ << std::endl;
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+		{
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
 		}
 		else if(t->is<IR::Type_String>())
-		{std::cout << __LINE__ << std::endl;
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+		{
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
 		}
 
 		else if(t->is<IR::Type_Table>())
-		{std::cout << __LINE__ << std::endl;  
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+		{
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;  
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
 		}
 		else if(t->is<IR::Type_Varbits>())
-		{std::cout << __LINE__ << std::endl;
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
+		{
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
 		}
         else if(t->is<IR::Type_Var>())
-        {std::cout << __LINE__ << std::endl;        
+        {
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;      
             // t->getVarName()
             // t->getP4Type()
 
-            MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString() << std::endl;)
+                std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString() << std::endl;
+                )
             // return(getCorrespondingType(t->getP4Type()));
         }
         else if(t->is<IR::Type_Enum>())
-        {std::cout << __LINE__ << std::endl;
-            const IR::Type_Enum *t_enum = dynamic_cast<const IR::Type_Enum *>(t);
+        {
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+                const IR::Type_Enum *t_enum = dynamic_cast<const IR::Type_Enum *>(t);
 
-            for(auto x: t_enum->members)
-            {std::cout << __LINE__ << std::endl;
-                std::cout << x->name << " " << x->declid << std::endl;
-            }
-            MYDEBUG(std::cout << "Incomplete Function : " <<__LINE__ << " : Not Yet Implemented for Type_Enum " << t->toString() << std::endl;)
+                for(auto x: t_enum->members)
+                {
+                    std::cout << __LINE__ << std::endl;
+                    std::cout << x->name << " " << x->declid << std::endl;
+                }
+                std::cout << "Incomplete Function : " <<__LINE__ << " : Not Yet Implemented for Type_Enum " << t->toString() << std::endl;
+            )
         }
 		else
 		{
-            std::cout << __LINE__ << std::endl;
-			MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString() << "==> getType ==> " << typeMap->getType(t) << std::endl;)
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString() << "==> getType ==> " << typeMap->getType(t) << std::endl;
+                )
 		}
 		MYDEBUG(std::cout << "Returning Int32 pointer for Incomplete Type" << std::endl;)
     	return(Type::getInt32PtrTy(TheContext));
 	}
     #define VECTOR_VISIT(V, T, SS)                                                      \
         bool EmitLLVMIR::preorder(const IR:: V <IR::T> *v){                             \
-        std::cout<<"\n" << SS << "\t "<<*v<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";   \
+        MYDEBUG(std::cout<<"\n" << SS << "\t "<<*v<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)\
         if (v == nullptr)                                                               \
             return true;                                                               \
         for (auto a : *v)                                                               \
@@ -734,188 +735,212 @@ namespace P4	{
 
     #undef VECTOR_VISIT
 
-
     // ______________________________________________________________________________________________________
     bool EmitLLVMIR::preorder(const IR::Type_Boolean* t)
      {
-        std::cout<<"\nType_Boolean\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Boolean\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Varbits* t)
     {
-        std::cout<<"\nType_Varbits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Varbits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Bits* t)
     {
-        std::cout<<"\nType_Bits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Bits\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_InfInt* t)
     {
-        std::cout<<"\nType_InfInt\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_InfInt\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
     bool EmitLLVMIR::preorder(const IR::Type_Dontcare* t)
     {
-        std::cout<<"\nType_Dontcare\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
-    }
-    bool EmitLLVMIR::preorder(const IR::Type_Void* t)
-    {
-        std::cout<<"\nype_Void\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
-        return true;
-    }
-    bool EmitLLVMIR::preorder(const IR::Type_Error* t)
-    {
-        std::cout<<"\nType_Error\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Dontcare\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
+    bool EmitLLVMIR::preorder(const IR::Type_Void* t)
+    {
+        MYDEBUG(std::cout<<"\nype_Void\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        return true;
+    }
+
+    bool EmitLLVMIR::preorder(const IR::Type_Error* t)
+    {
+        MYDEBUG(std::cout<<"\nType_Error\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        return true;
+    }
 
     bool EmitLLVMIR::preorder(const IR::Type_Name* t)
     {
-        std::cout<<"\nType_Name\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Name\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
 
     }
 
     bool EmitLLVMIR::preorder(const IR::Type_Package* t)
     {
-        std::cout<<"\nType_Package\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Package\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
-
 
     bool EmitLLVMIR::preorder(const IR::Type_Stack* t)
     {
-        std::cout<<"\nType_Stack\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Stack\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Specialized* t)
     {
-        std::cout<<"\nType_Specialized\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Specialized\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Enum* t)
     {
-        std::cout<<"\nType_Enum\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Enum\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Typedef* t)
     {
-        std::cout<<"\nType_Typedef\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Typedef\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Type* t)
     {
-        std::cout<<"\nType_Type\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Type\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+    
     bool EmitLLVMIR::preorder(const IR::Type_Unknown* t)
     {
-        std::cout<<"\nType_Unknown\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Unknown\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Type_Tuple* t)
     {
-        std::cout<<"\nType_Tuple\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nType_Tuple\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
     // declarations
     bool EmitLLVMIR::preorder(const IR::Declaration_Constant* cst)
     {
-        std::cout<<"\nDeclaration_Constant\t "<<*cst<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nDeclaration_Constant\t "<<*cst<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Declaration_Instance* t)
     {
-        std::cout<<"\nDeclaration_Instance\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nDeclaration_Instance\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Declaration_MatchKind* t)
     {
-        std::cout<<"\nDeclaration_MatchKind\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nDeclaration_MatchKind\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
     // expressions
     bool EmitLLVMIR::preorder(const IR::Constant* t)
     {
-        std::cout<<"\nConstant\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nConstant\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Slice* t)
     {
-        std::cout<<"\nSlice\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nSlice\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::BoolLiteral* t)
     {
-        std::cout<<"\nBoolLiteral\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nBoolLiteral\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::StringLiteral* t)
     {
-        std::cout<<"\nStringLiteral\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nStringLiteral\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::PathExpression* t)
     {
-        std::cout<<"\nPathExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nPathExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Cast* t)
     {
-        std::cout<<"\nCast\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nCast\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Operation_Binary* t)
     {
-        std::cout<<"\nOperation_Binary\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nOperation_Binary\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Operation_Unary* t)
     {
-        std::cout<<"\nOperation_Unary\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nOperation_Unary\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::ArrayIndex* t)
     {
-        std::cout<<"\nArrayIndex\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nArrayIndex\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::TypeNameExpression* t)
     {
-        std::cout<<"\nTypeNameExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nTypeNameExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Mux* t)
     {
-        std::cout<<"\nMux\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nMux\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::ConstructorCallExpression* t)
     {
-        std::cout<<"\nConstructorCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nConstructorCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Member* t)
     {
-        std::cout<<"\nMember\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nMember\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::SelectCase* t)
     {
         //handled inside SelectExpression
-        std::cout<<"\nSelectCase\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nSelectCase\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::SelectExpression* t)
     {
-        std::cout<<"\nSelectExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nSelectExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         
         //right now, only supports single key based select. and cases are allowed only on integer constant expressions
         /*
@@ -935,7 +960,7 @@ namespace P4	{
         */
 
         bool issetdefault = false;
-        for (int i=0;i<t->selectCases.size();i++) {
+        for (unsigned i=0;i<t->selectCases.size();i++) {
             //visit(t->selectCases[i]);
             if (dynamic_cast<const IR::DefaultExpression *>(t->selectCases[i]->keyset)) {
                 if (issetdefault) continue;
@@ -958,148 +983,169 @@ namespace P4	{
         }
         return false;
     }
+
     bool EmitLLVMIR::preorder(const IR::ListExpression* t)
     {
-        std::cout<<"\nListExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nListExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::MethodCallExpression* t)
     {
-        std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::DefaultExpression* t)
     {
-        std::cout<<"\nDefaultExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nDefaultExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::This* t)
     {
-        std::cout<<"\nThis\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nThis\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
-
-
 
     // // statements
     bool EmitLLVMIR::preorder(const IR::BlockStatement* t)
     {
-        std::cout<<"\nBlockStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nBlockStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::MethodCallStatement* t)
     {
-        std::cout<<"\nMethodCallStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nMethodCallStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::EmptyStatement* t)
     {
-        std::cout<<"\nEmptyStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nEmptyStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+    
     bool EmitLLVMIR::preorder(const IR::ReturnStatement* t)
     {
-        std::cout<<"\nReturnStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nReturnStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::ExitStatement* t)
     {
-        std::cout<<"\nExitStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nExitStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::SwitchCase* t)
     {
-        std::cout<<"\nSwitchCase\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nSwitchCase\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::SwitchStatement* t)
     {
-        std::cout<<"\nSwitchStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nSwitchStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
     // misc
     bool EmitLLVMIR::preorder(const IR::Path* t)
     {
-        std::cout<<"\nPath\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nPath\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Annotation* t)
     {
-        std::cout<<"\nAnnotation\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nAnnotation\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::P4Program* t)
     {
-        std::cout<<"\nP4Program\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nP4Program\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::P4Action* t)
     {
-        std::cout<<"\nP4Action\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nP4Action\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Method* t)
     {
-        std::cout<<"\nMethod\t "<<t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nMethod\t "<<t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Function* t)
     {
-        std::cout<<"\nFunction\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nFunction\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
     bool EmitLLVMIR::preorder(const IR::ExpressionValue* t)
     {
-        std::cout<<"\nExpressionValue\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nExpressionValue\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::ActionListElement* t)
     {
-        std::cout<<"\nActionListElement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nActionListElement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::ActionList* t)
     {
-        std::cout<<"\nActionList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nActionList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Key* t)
     {
-        std::cout<<"\nKey\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nKey\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Property* t)
     {
-        std::cout<<"\nProperty\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nProperty\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::TableProperties* t)
     {
-        std::cout<<"\nTableProperties\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nTableProperties\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::EntriesList *t)
     {
-        std::cout<<"\nEntriesList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nEntriesList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::Entry *t)
     {
-        std::cout<<"\nEntry\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nEntry\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
+
     bool EmitLLVMIR::preorder(const IR::P4Table* t)
     {
-        std::cout<<"\nP4Table\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nP4Table\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
     // in case it is accidentally called on a V1Program
     bool EmitLLVMIR::preorder(const IR::V1Program* t)
     {
-        std::cout<<"\nV1Program\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";
+        MYDEBUG(std::cout<<"\nV1Program\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
         
     }
