@@ -25,6 +25,7 @@ limitations under the License.
 
 class Visitor {
  public:
+    virtual void dumpLLVMIR(){}
     struct Context {
         // We maintain a linked list of Context structures on the stack
         // in the Visitor::apply_visitor functions as we do the recursive

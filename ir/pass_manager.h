@@ -21,7 +21,6 @@ limitations under the License.
 
 typedef std::function<void(const char* manager, unsigned seqNo,
                            const char* pass, const IR::Node* node)> DebugHook;
-
 class PassManager : virtual public Visitor, virtual public Backtrack {
     bool early_exit_flag;
     mutable int never_backtracks_cache = -1;
@@ -46,11 +45,8 @@ class PassManager : virtual public Visitor, virtual public Backtrack {
     PassManager(const std::initializer_list<Visitor *> &init)
     { addPasses(init); }
     ~PassManager()  {
-        for(std::vector<Visitor*>::iterator it = passes.begin(); it != passes.end(); ++it) {
-    /* std::cout << *it; ... */
-            delete(*it);
-            // std::cout<<"success delete\n";
-        }
+        for(auto it : passes)
+            it->dumpLLVMIR();
     }
     const IR::Node *apply_visitor(const IR::Node *, const char * = 0) override;
     bool backtrack(trigger &trig) override;

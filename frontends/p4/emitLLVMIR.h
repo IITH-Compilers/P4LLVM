@@ -1,4 +1,3 @@
-
 #ifndef _FRONTENDS_P4_EMITLLVMIR_H_
 #define _FRONTENDS_P4_EMITLLVMIR_H_
 
@@ -6,7 +5,7 @@
 #include "ir/visitor.h"
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "frontends/p4/typeChecking/typeChecker.h"
-// #include "ir/node.h"
+
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/BasicBlock.h"
@@ -18,7 +17,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/FileSystem.h"
-// #include "llvm/IR/Verifier.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -31,28 +30,24 @@
 #include "iostream"
 #include "lib/nullstream.h"
 #include "llvm/ADT/APInt.h"
-// class Value;
+
 using namespace llvm;
 
+#define VERBOSE 0
 
+#if VERBOSE
 #ifndef MYDEBUG
-#define MYDEBUG(x) x
-
-
-
-
+    #define MYDEBUG(x) x
+#endif
+#else 
+    #define MYDEBUG(x)
+#endif
 
 #ifndef REPORTBUG
 #define REPORTBUG(x) x
 #endif
 namespace P4 {
-
-
-
 ///////////////////////////////////////////////////
-
-
-
 template <typename T>
 class ScopeTable{
     int scope;
@@ -65,11 +60,11 @@ class ScopeTable{
     }
     void insert(std::string str, T t)   {
         dict.at(scope).insert(std::pair<std::string,T>(str,t));
-        std::cout << "inserted "<<str<<" at scope - "<<scope <<std::endl;
+        MYDEBUG(std::cout << "inserted "<<str<<" at scope - "<<scope <<std::endl;);
         typename std::map <std::string, T> map = dict.at(scope);
-        // for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
-        //     std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";
-        // }
+        for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
+            MYDEBUG(std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";)
+        }
     }
     void enterScope()   {
         scope++;
@@ -87,21 +82,21 @@ class ScopeTable{
         typename std::map <std::string, T> map = dict.at(scope);
         if(entry != dict.at(scope).end())
         {
-            std::cout << entry->first << std::endl; 
+            MYDEBUG(std::cout << entry->first << std::endl; );
             return entry->second;
         }
         else
         {
-            std::cout << "Not Found - " << label<< std::endl; 
+            MYDEBUG(std::cout << "Not Found - " << label<< std::endl; );
             return 0;
         } 
     }
     T lookupGlobal(std::string label)   {
         for(int i=scope; i>=0; i--) {
-            std::cout<<"searching for "<<label<<" in scopetable at scope = "<<i<<std::endl;
+            MYDEBUG(std::cout<<"searching for "<<label<<" in scopetable at scope = "<<i<<std::endl;);
             auto entry = dict.at(i).find(label);
             if(entry != dict.at(i).end())   {
-                std::cout<<"returning value from scope table as -> " << entry->second << std::endl;
+                MYDEBUG(std::cout<<"returning value from scope table as -> " << entry->second << std::endl;);
                 return entry->second;
             }
         }
@@ -121,7 +116,7 @@ class ScopeTable{
 
 class EmitLLVMIR : public Inspector {
     Function *function;
-    int i =0;
+    int i =0; //Debug info
     LLVMContext TheContext;
     std::unique_ptr<Module> TheModule;
     llvm::IRBuilder<> Builder;
@@ -131,14 +126,19 @@ class EmitLLVMIR : public Inspector {
     raw_fd_ostream *S;
     cstring fileName;
     ScopeTable<Value*> st;
-    //can be an instance of ScopeTable<Type*>
+
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
+
+    // Helper Functions 
+    unsigned getByteAlignment(unsigned width);
+    llvm::Type* getCorrespondingType(const IR::Type *t);
+    llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr);
+
    public:
     EmitLLVMIR(const IR::P4Program* program, cstring fileName, ReferenceMap* refMap, TypeMap* typeMap) : fileName(fileName), Builder(TheContext), refMap(refMap), typeMap(typeMap) {
         CHECK_NULL(program); 
         CHECK_NULL(fileName);
-        std::cout<< this->typeMap << "\t" << typeMap << "\n";
         TheModule = llvm::make_unique<Module>("p4Code", TheContext);
         std::vector<Type*> args;
         FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
@@ -148,13 +148,12 @@ class EmitLLVMIR : public Inspector {
         Builder.SetInsertPoint(bbInsert);
         setName("EmitLLVMIR");
     }
-    ~EmitLLVMIR () {
 
+    void dumpLLVMIR() {
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
         Builder.CreateRetVoid();
         TheModule->print(*S,nullptr);
-        std::cout<<"\n************************************************************************\n";
     }
     // Helper Function (Declare them private)
     unsigned getByteAlignment(unsigned width);
@@ -268,5 +267,5 @@ class EmitLLVMIR : public Inspector {
     bool preorder(const IR::IndexedVector<IR::StatOrDecl>* t) override;
 };
 }  // namespace P4
-#endif
+
 #endif /* _FRONTENDS_P4_LLVMIR_H_ */
