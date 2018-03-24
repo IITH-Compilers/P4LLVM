@@ -67,6 +67,13 @@ namespace P4	{
     	StructType *structReg = llvm::StructType::create(TheContext, members, "struct."+t->name); // 
 		defined_type[t->externalName()] = structReg;
 
+        /*int i=0;
+        for(auto x: t->fields)
+        {
+            structIndexMap[structReg][std::string(x->name.name)] = i;
+            i++;
+        }*/
+
     	alloca = Builder.CreateAlloca(structReg);
     	st.insert("alloca_"+t->getName(),alloca);
     	return true;
@@ -275,7 +282,7 @@ namespace P4	{
 
         if(t->left->is<IR::PathExpression>())   {
             cstring name = refMap->getDeclaration(t->left->to<IR::PathExpression>()->path)->getName();
-            Value* v = st.lookupLocal("alloca_"+name);
+            Value* v = st.lookupGlobal("alloca_"+name);
 
             // assert(v != nullptr);
             if(v==nullptr)
@@ -294,7 +301,6 @@ namespace P4	{
 				//store 
 				Builder.CreateStore(right,v);			
 			}
-			
 		}
 
 		// else	{
@@ -364,6 +370,16 @@ namespace P4	{
 
 			if(e->is<IR::LNot>())
 				return Builder.CreateICmpEQ(exp, ConstantInt::get(exp->getType(),0));
+
+            /*if (e->is<IR::Member>()) {
+                Value *ex = processExpression(e->to<IR::Member>()->expr);
+                int ext_i = structIndexMap[ex->getType()][std::string(e->to<IR::Member>()->member.name)];
+
+                std::vector<Value *> idx;
+                idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+                idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, ext_i, false)));
+                return Builder.CreateGEP(ex, idx);
+            }*/
 		}
 		if(e->is<IR::BoolLiteral>())	{
 			const IR::BoolLiteral* c = e->to<IR::BoolLiteral>();			
@@ -378,10 +394,11 @@ namespace P4	{
 
 		if(e->is<IR::PathExpression>())	{
 			cstring name = refMap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();	
-			Value* v = st.lookupLocal("alloca_"+name);
+			Value* v = st.lookupGlobal("alloca_"+name);
 			assert(v != nullptr);
 			return Builder.CreateLoad(v);
 		}
+
 
 		if(e->is<IR::Operation_Binary>())	{
 			const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
@@ -975,10 +992,10 @@ namespace P4	{
 
         SwitchInst *sw = Builder.CreateSwitch(processExpression(t->select,NULL,NULL), defined_state["reject"], t->selectCases.size());
         //comment above line and uncomment below commented code to test selectexpression with dummy select key
-        /*
-        Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
-        SwitchInst *sw = Builder.CreateSwitch(tmp, defined_state["reject"], t->selectCases.size());
-        */
+        
+        /*Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
+        SwitchInst *sw = Builder.CreateSwitch(tmp, defined_state["reject"], t->selectCases.size());*/
+        
 
         bool issetdefault = false;
         for (unsigned i=0;i<t->selectCases.size();i++) {
@@ -988,14 +1005,14 @@ namespace P4	{
                 else {
                     issetdefault = true;
                     if (defined_state.find(t->selectCases[i]->state->path->asString()) == defined_state.end()) {
-                        defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, *new const Twine(t->selectCases[i]->state->path->asString()), function);
+                        defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, Twine(t->selectCases[i]->state->path->asString()), function);
                     }
                     sw->setDefaultDest(defined_state[t->selectCases[i]->state->path->asString()]);
                 }
             }
             else if (dynamic_cast<const IR::Constant *>(t->selectCases[i]->keyset)) {
                 if (defined_state.find(t->selectCases[i]->state->path->asString()) == defined_state.end()) {
-                    defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, *new const Twine(t->selectCases[i]->state->path->asString()), function);
+                    defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, Twine(t->selectCases[i]->state->path->asString()), function);
                 }
                 ConstantInt *onVal = ConstantInt::get(IntegerType::get(TheContext, 64), ((IR::Constant *)(t->selectCases[i]->keyset))->asLong(), true);
 
@@ -1094,7 +1111,76 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::P4Action* t)
     {
         MYDEBUG(std::cout<<"\nP4Action\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
+        //TODO handling Annotations
+        Function *old_func = function;
+        BasicBlock *old_bb = bbInsert;
+
+        std::vector<Type*> args;
+        std::vector<std::string> names;
+        std::set<std::string> allnames;
+
+        for (auto param : *(t->parameters)->getEnumerator())
+        {
+            //add this parameter type to args
+            args.push_back(getCorrespondingType(param->type));
+            names.push_back(std::string(param->name.name));
+            allnames.insert(std::string(param->name.name));
+        }
+
+        int actual_argsize = args.size();
+
+        //add more parameters from outer scopes
+        for (int i = st.getCurrentScope(); i>=0 ; i--) {
+            auto &vars = st.getVars(i);
+            for (auto vp : vars) {
+                if (allnames.find(std::string(vp.first)) == allnames.end()) {
+                    args.push_back(vp.second->getType());
+                    names.push_back(std::string(vp.first));
+                    allnames.insert(std::string(vp.first));
+                }
+            }
+        }
+
+
+        FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
+        
+        function = Function::Create(FT, Function::ExternalLinkage, Twine(t->name.name), TheModule.get());
+        bbInsert = BasicBlock::Create(TheContext, "entry", function);
+        Builder.SetInsertPoint(bbInsert);
+
+        auto names_iter = names.begin();
+        for (auto arg = function->arg_begin(); arg != function->arg_end(); arg++)
+        {
+            //name the argument
+            arg->setName(Twine(*names_iter));
+            names_iter++;
+        }
+
+        //add new parameters to scope table
+        st.enterScope();
+
+        // Is this necessary? anyway pointers to the parameters (alloca's) will be added to scope table in IR::Parameter
+        /*auto args_iter = function->arg_begin();
+        for (int i=0; i< actual_argsize; i++) {
+            st.insert(names[i], (Value *) args_iter);
+            args_iter++;
+        }*/
+        
+        visit(t->annotations);
+        visit(t->parameters);
+
+        st.enterScope();
+
+        visit(t->body);
+
+        st.exitScope();
+
+        st.exitScope();
+
+        function = old_func;   
+        bbInsert = old_bb; 
+        Builder.SetInsertPoint(bbInsert);
+        return false;
     }
 
     bool EmitLLVMIR::preorder(const IR::Method* t)
@@ -1130,7 +1216,46 @@ namespace P4	{
     bool EmitLLVMIR::preorder(const IR::Key* t)
     {
         MYDEBUG(std::cout<<"\nKey\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
+        
+        AllocaInst* alloca;
+        std::vector<Type*> members;
+
+        std::vector<Value *> expr;
+        for(auto x: t->keyElements)
+        {
+            //annotations, matchType, expression
+            visit(x->annotations);
+            visit(x->matchType);
+            expr.push_back(processExpression(x->expression));
+        }
+
+        for (int i=(int)expr.size()-1;i>=0;i--) {
+            members.push_back(expr[i]->getType());
+        }
+
+        StructType *structReg = llvm::StructType::create(TheContext, members, llvm::StringRef("struct."+std::string(function->getName())+"_t_key")); // 
+        defined_type[std::string(function->getName())+"_t_key"] = structReg;
+
+
+        /*for (int i=0;i<members.size();i++) {
+            std::stringstream sout;
+            sout << members.size()-1-i;
+            structIndexMap[structReg]["field"+sout.str()] = i;
+        }*/
+
+        alloca = Builder.CreateAlloca(structReg);
+        alloca->setName(Twine("key"));
+        st.insert("alloca_key",alloca);
+
+        for (int i=0;i<expr.size();i++) {
+            std::vector<Value *> idx;
+            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, (int)expr.size()-1-i, false)));
+            Value *cur = Builder.CreateGEP((Value *) alloca, idx);
+            Builder.CreateStore(expr[i], cur);
+        }
+
+        return false;
     }
 
     bool EmitLLVMIR::preorder(const IR::Property* t)

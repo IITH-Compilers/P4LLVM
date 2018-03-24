@@ -60,7 +60,7 @@ using namespace llvm;
     #define MYDEBUG(x) x
 #endif
 #else 
-    #define MYDEBUG(x)
+    #define MYDEBUG(x) x
 #endif
 
 #ifndef REPORTBUG
@@ -132,6 +132,13 @@ class ScopeTable{
             
         }
     }
+    int getCurrentScope() {
+        return scope;
+    }
+    std::map<std::string, T>& getVars(int sc) {
+        assert(sc>=0 && sc<=scope);
+        return dict.at(sc);
+    }
 };
 
 class EmitLLVMIR : public Inspector {
@@ -146,6 +153,9 @@ class EmitLLVMIR : public Inspector {
     raw_fd_ostream *S;
     cstring fileName;
     ScopeTable<Value*> st;
+
+    //IN PROGRESS - used for GEP i.e., from member name get the field index in a struct. all the work related to getelementptr is commented
+    //std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
 
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
