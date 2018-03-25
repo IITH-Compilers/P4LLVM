@@ -1,3 +1,23 @@
+/*
+IIT Hyderabad
+
+authors:
+Venkata Keerthy, Pankaj K, Bhanu Prakash T, D Tharun Kumar
+{cs17mtech11018, cs15btech11029, cs15btech11037, cs15mtech11002}@iith.ac.in
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 #ifndef _FRONTENDS_P4_EMITLLVMIR_H_
 #define _FRONTENDS_P4_EMITLLVMIR_H_
 
@@ -33,7 +53,7 @@
 
 using namespace llvm;
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 #if VERBOSE
 #ifndef MYDEBUG
@@ -143,24 +163,19 @@ class EmitLLVMIR : public Inspector {
         std::vector<Type*> args;
         FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
         function = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
-        
+
         bbInsert = BasicBlock::Create(TheContext, "entry", function);
         Builder.SetInsertPoint(bbInsert);
+        std::ostream& opStream = *openFile(fileName+".ll", true);
         setName("EmitLLVMIR");
     }
 
     void dumpLLVMIR() {
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
-        Builder.CreateRetVoid();
+        // Builder.CreateRetVoid();
         TheModule->print(*S,nullptr);
     }
-    // Helper Function (Declare them private)
-    unsigned getByteAlignment(unsigned width);
-    llvm::Type* getCorrespondingType(const IR::Type *t);
-    llvm::Value* processExpression(const IR::Expression *e);
-
-
 
     // Visitor function
     bool preorder(const IR::Type_Boolean* t) override;
@@ -249,8 +264,6 @@ class EmitLLVMIR : public Inspector {
     // in case it is accidentally called on a V1Program
     bool preorder(const IR::V1Program*) override;
     bool preorder(const IR::Type_Extern* t) override;
-
-
     bool preorder(const IR::Type_StructLike* t) override;
     bool preorder(const IR::AssignmentStatement* t) override;
     bool preorder(const IR::P4Control* t) override;
