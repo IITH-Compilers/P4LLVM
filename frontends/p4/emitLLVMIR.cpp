@@ -26,20 +26,6 @@ limitations under the License.
 #include "llvm/IR/DerivedTypes.h"
 
 namespace P4	{
-	///// --> To do very big bit size 
-    unsigned EmitLLVMIR::getByteAlignment(unsigned width) {
-    	if (width <= 8)
-    	    return 8;
-    	else if (width <= 16)
-    	    return 16;
-    	else if (width <= 32)
-    	    return 32;
-    	else if (width <= 64)
-    	    return 64;
-    	else
-    	    // compiled as u8* 
-    	    return 64;
-    }
 
     bool EmitLLVMIR::preorder(const IR::Declaration_Variable* t)
     {
@@ -55,9 +41,8 @@ namespace P4	{
     	auto z = defined_type[t->externalName()];
     	if(z)
     	{
-    		return(defined_type[t->externalName()]);
+    		return(true);
     	}
-
     	AllocaInst* alloca;
     	std::vector<Type*> members;
     	for(auto x: t->fields)
@@ -87,7 +72,7 @@ namespace P4	{
         MYDEBUG(std::cout<<"\nParameterList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         for (auto param : *t->getEnumerator())
         {
-            MYDEBUG(std::cout << "flag2: " << param << std::endl;)
+            // MYDEBUG(std::cout << "flag2: " << param << std::endl;)
             visit(param); // visits parameter
         }
         return true;
@@ -157,30 +142,74 @@ namespace P4	{
     // Completed
     bool EmitLLVMIR::preorder(const IR::P4Parser* t)
     {
-        MYDEBUG(std::cout<<"\nTP4Parser\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        visit(t->type); // visits type_parser
+        MYDEBUG(std::cout<<"\nP4Parser\t "<<*t<<"\ti = "<<i++<<" --> " << t->getName() << "\n-------------------------------------------------------------------------------------------------------------\n";)
+        auto pl = t->type->getApplyParameters();
+        // if (pl->size() != 2)
+        // {
+        //     // this 2 is for target ebpf (bmv2 have 4)
+        //     ::error("Expected parser to have exactly 2 parameters");
+        //     return true;
+        // }
+        std::vector<Type*> parser_function_args; // need this to pass for type_parser
+        for (auto p : pl->parameters)
+        {
+            parser_function_args.push_back(getCorrespondingType(p->type)); // push type of parameter
+        }
 
+
+
+        FunctionType *parser_function_type = FunctionType::get(Type::getInt32Ty(TheContext), parser_function_args, false);
+        Function *parser_function = Function::Create(parser_function_type, Function::ExternalLinkage,  std::string(t->getName().toString()), TheModule.get());
+        Function::arg_iterator args = parser_function->arg_begin();
+        for (auto p : pl->parameters)
+        {
+            args->setName(std::string(p->name.name));
+            args++;
+        }
+
+
+        BasicBlock *init_block = BasicBlock::Create(TheContext, "entry", parser_function);
+        Builder.SetInsertPoint(init_block);
+        // TypeParameters
+        //  May Not Work
+        if (!t->getTypeParameters()->empty())
+        {
+            for (auto a : t->getTypeParameters()->parameters)
+            {
+                // visits Type_Var
+                // a->getVarName()
+                // a->getDeclId()
+                // a->getP4Type()
+                // return(getCorrespondingType(t->getP4Type()));
+                AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(t->getP4Type()));
+                st.insert("alloca_"+a->getVarName(),alloca);
+            }
+        }
+        // visit(t->annotations);
+        // visit(t->getTypeParameters());    // visits TypeParameters
+
+        for (auto p : t->getApplyParameters()->parameters) {
+            auto type = typeMap->getType(p);
+            bool initialized = (p->direction == IR::Direction::In || p->direction == IR::Direction::InOut);
+            // auto value = factory->create(type, !initialized); // Create type declaration
+        }
         if (t->constructorParams->size() != 0) 
             visit(t->constructorParams); //visits Vector -> ParameterList
-
         visit(&t->parserLocals); // visits Vector -> Declaration 
-
         //Declare basis block for each state
         for (auto s : t->states)  
         {
-            llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, std::string(s->name.name), function);
+            llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(TheContext, std::string(s->name.name), parser_function);
             defined_state[s->name.name] = bbInsert;
             MYDEBUG(std::cout << s->name.name << std::endl;)
         }
-
         // visit all states
         visit(&t->states);
-        // for (auto s : t->states)
-        // {
-        //     MYDEBUG(std::cout << "Visiting State = " <<  s << std::endl;);
-        //     visit(s);
-        // }
-
+        for (auto s : t->states)
+        {
+            MYDEBUG(std::cout << "Visiting State = " <<  s << std::endl;);
+            visit(s);
+        }
         Builder.SetInsertPoint(defined_state["accept"]); // on exit set entry of new inst in accept block
         return true;
     }
@@ -195,29 +224,25 @@ namespace P4	{
         {
             // if start state then create branch
             // from main function to start block
-            Builder.CreateBr(defined_state[parserState->name.name]);
+            Builder.CreateBr(defined_state[parserState->name.name]); // branch from enrty block of function to start
         }
 
         // set this block as insert point
         Builder.SetInsertPoint(defined_state[parserState->name.name]);
         if (parserState->name == "accept")
         {
+            Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
             return true;
-
         }
         else if(parserState->name == "reject")
         {
-            Builder.CreateRetVoid();
+            Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext),0));
             return true;
         }
-        
         preorder(&parserState->components); // indexvector -> statordecl
-
-
+       
         // ----------------------  Check From Here  ----------------------
-
         // if  select expression is null
-        
         if (parserState->selectExpression == nullptr) // Create branch to reject(there should be some transition or select)
         {
             MYDEBUG(std::cout<< parserState->selectExpression << std::endl;);
@@ -348,8 +373,9 @@ namespace P4	{
 
 		Builder.SetInsertPoint(bbEnd);
 		return true;
-	}
+	}  
 
+    // Incomplete Method Expression (extract and all)
 	Value* EmitLLVMIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullptr*/, BasicBlock* bbElse/*=nullptr*/)	{
 		assert(e != nullptr);
 
@@ -537,32 +563,250 @@ namespace P4	{
 
 	}
 
+    // bool StateTranslationVisitor::preorder(const IR::MethodCallExpression* expression) {
+    //     visit(expression->method); // visits expression
+
+    //     bool first = true;
+    //     for (auto a  : *expression->arguments)
+    //     {
+    //         if (!first)
+    //             // add it in vector of llvm::value then call function
+    //         first = false;
+    //         visit(a); // visits expression
+    //     }
+        
+    //     auto mi = P4::MethodInstance::resolve(expression,
+    //                                           state->parser->program->refMap,
+    //                                           state->parser->program->typeMap);
+    //     auto extMethod = mi->to<P4::ExternMethod>();
+    //     if (extMethod != nullptr) {
+    //         auto decl = extMethod->object;
+    //         if (decl == state->parser->packet) {
+    //             if (extMethod->method->name.name == p4lib.packetIn.extract.name) {
+    //                 compileExtract(expression->arguments);
+    //                 return true;
+    //             }
+
+    //             BUG("Unhandled packet method %1%", expression->method);
+    //             return true;
+    //         }
+    //     }
+
+    //     ::error("Unexpected method call in parser %1%", expression);
+    //     return true;
+    // }
+
+    bool EmitLLVMIR::preorder(const IR::MethodCallExpression* t)
+    {
+        MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        MYDEBUG(std::cout << t->method << "\n";) // Expression
+
+        MYDEBUG(std::cout << t->typeArguments << "\n";) // vector of type (just type)
+        std::vector<Type*> method_args;
+        for(auto v: *(t->typeArguments))
+        {
+            std::cout << "Type Argument: " << v << "\n";
+        }
+
+        llvm::Type *method_returnType = getCorrespondingType(t->type->returnType);
+        // Templates define (t->type->getTypeParameters())
+        for(auto p : t->type->parameters)
+        {
+            auto llvm_type = typeMap->getType(p);
+            // make that type as pointer
+            auto pointerToType = llvm::PointerType::get(llvm_type);
+            method_args.push_back(pointerToType);
+        }
+        FunctionType *method_type = FunctionType::get(method_returnType, method_args, false);
+        Function *method_function = Function::Create(method_type, Function::ExternalLinkage,  std::string(t->getName().toString()), TheModule.get());
+        Function::arg_iterator args = method_function->arg_begin();
+        for (auto p : t->type->parameters)
+        {
+            args->setName(std::string(p->name.name));
+            args++;
+
+
+        MYDEBUG(std::cout << t->arguments << "\n";) // vector of argument (value)
+        MYDEBUG(std::cout << t->type << "\n";) // vector of argument (value)
+
+        visit(t->method); // Expression
+
+        
+        bool first = true;
+        for (auto a  : *t->arguments) { // vector of expression
+            // visit(a);
+
+        }
+
+        // auto mi = P4::MethodInstance::resolve(t,
+        //                                       state->parser->program->refMap,
+        //                                       state->parser->program->typeMap);
+        // auto extMethod = mi->to<P4::ExternMethod>();
+        // if (extMethod != nullptr) {
+        //     auto decl = extMethod->object;
+        //     if (decl == state->parser->packet) {
+        //         if (extMethod->method->name.name == p4lib.packetIn.extract.name) {
+        //             compileExtract(t->arguments);
+        //             return true;
+        //         }
+
+        //         BUG("Unhandled packet method %1%", t->method);
+        //         return true;
+        //     }
+        // }
+
+        return true;
+    }
+    bool EmitLLVMIR::preorder(const IR::MethodCallStatement* t)
+    {
+        MYDEBUG(std::cout<<"\nMethodCallStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        visit(t->methodCall);
+        return true;
+    }
+    bool EmitLLVMIR::preorder(const IR::Method* t)
+    {
+        MYDEBUG(std::cout<<"\nMethod\t "<<t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+    //     if(t->isAbstract != 1) {
+    //         return true;
+    //     }
+    //     std::vector<Type*> method_args; // need this to pass for type_parser
+    //     llvm::Type *method_returnType = getCorrespondingType(t->type->returnType);
+    //     // Templates define (t->type->getTypeParameters())
+    //     for(auto p : t->type->parameters)
+    //     {
+    //         auto llvm_type = typeMap->getType(p);
+    //         // make that type as pointer
+    //         auto pointerToType = llvm::PointerType::get(llvm_type);
+    //         method_args.push_back(pointerToType);
+    //     }
+    //     FunctionType *method_type = FunctionType::get(method_returnType, method_args, false);
+    //     Function *method_function = Function::Create(method_type, Function::ExternalLinkage,  std::string(t->getName().toString()), TheModule.get());
+    //     Function::arg_iterator args = method_function->arg_begin();
+    //     for (auto p : t->type->parameters)
+    //     {
+    //         args->setName(std::string(p->name.name));
+    //         args++;
+    }
+
+      
+    //     // Type_Method --> type
+    //         // TypeParameters --> typeParameters
+    //         // Type --> returnType
+    //         // ParameterList --> parameters
+    //     // isAbstract --> Bool
+    //     // MYDEBUG(std::cout<< t->type << "\n"; )
+    //     // MYDEBUG(std::cout<< t->type->returnType << "\n"; )
+    //     MYDEBUG(std::cout<< t->type->typeParameters << "\n"; )
+    //     MYDEBUG(std::cout<< t->type->parameters << "\n"; )
+    //     MYDEBUG(std::cout<< t->isAbstract << "\n"; )
+    //     return true;
+    // }
+
+
+    // if (!t->getTypeParameters()->empty())
+    // {
+    //     for (auto a : t->getTypeParameters()->parameters)
+    //     {
+    //         // visits Type_Var
+    //         // a->getVarName()
+    //         // a->getDeclId()
+    //         // a->getP4Type()
+    //         // return(getCorrespondingType(t->getP4Type()));
+    //         AllocaInst *alloca = Builder.CreateAlloca(getCorrespondingType(t->getP4Type()));
+    //         st.insert("alloca_"+a->getVarName(),alloca);
+    //     }
+    // }
+    // // visit(t->annotations);
+    // // visit(t->getTypeParameters());    // visits TypeParameters
+
+    // for (auto p : t->getApplyParameters()->parameters) {
+    //     auto type = typeMap->getType(p);
+    //     bool initialized = (p->direction == IR::Direction::In || p->direction == IR::Direction::InOut);
+    //     // auto value = factory->create(type, !initialized); // Create type declaration
+    // }
+    // if (t->constructorParams->size() != 0) 
+    //     visit(t->constructorParams); //visits Vector -> ParameterList
+    // visit(&t->parserLocals); // visits Vector -> Declaration 
+    // //Declare basis block for each state
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // Helper Function
     llvm::Type* EmitLLVMIR::getCorrespondingType(const IR::Type *t)
     {
-        // Type_Name
-        // Type_Enum
-        MYDEBUG(std::cout << __LINE__ << std::endl;)
-        if(!t)
-        {
+        if(!t) {
             return nullptr;
         }
-    	if(t->is<IR::Type_Boolean>())
-    	{	
-			llvm::Type *temp = Type::getInt8Ty(TheContext);							
-			defined_type[t->toString()] = temp;
-	    	return temp;
-    	}
 
+        // Check if base Types
+            // Boolean 
+            // Integer
+            //
+            //
+            //
+        if(t->is<IR::Type_Void>()) {
+            return llvm::Type::getVoidTy(TheContext);
+        }
+        else if(t->is<IR::Type_Error>()) {
+            // Should be of enum type
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+                std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )
+        }
+        else if(t->is<IR::Type_MatchKind>()) {
+            // Part of
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+                std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )   
+        }
+        else if(t->is<IR::Type_Boolean>()) {
+            llvm::Type *temp = Type::getInt8Ty(TheContext);                         
+            defined_type[t->toString()] = temp;
+            return temp;
+        }
+        else if(t->is<IR::StringLiteral>()) {
+            MYDEBUG(
+                std::cout << __LINE__ << std::endl;
+                std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
+                )  
+        //     auto string_value = t->to<IR::StringLiteral>()->value;
+        //     llvm::Type *temp = Type::getInt8Ty(TheContext);
+        //     ArrayType *ArrayTy_0 = ArrayType::get(IntegerType::get(M.getContext(), strlen(string_value)), 4);
+
+        //     defined_type[t->toString()] = temp;
+        //     return temp;
+        // }
+        }
     	// if int<> or bit<> /// bit<32> x; /// The type of x is Type_Bits(32); /// The type of 'bit<32>' is Type_Type(Type_Bits(32))
     	else if(t->is<IR::Type_Bits>()) // Bot int <> and bit<> passes this check
     	{
-            MYDEBUG(std::cout << __LINE__ << std::endl;)
     		const IR::Type_Bits *x =  dynamic_cast<const IR::Type_Bits *>(t);
-    		
-    		int width = x->width_bits(); // false
+    		int width = x->width_bits();
     		// To do this --> How to implement unsigned and signed int in llvm
+            // Right now they both are same
     		if(x->isSigned)
     		{	
 				llvm::Type *temp = Type::getIntNTy(TheContext, getByteAlignment(width));				
@@ -576,17 +820,16 @@ namespace P4	{
     			return temp;
     		}
     	}
+        
 
+        // Derived Types
     	else if (t->is<IR::Type_StructLike>()) 
     	{
-            MYDEBUG(std::cout << __LINE__ << std::endl;)
-            // Just a bug check
     		if (!t->is<IR::Type_Struct>() && !t->is<IR::Type_Header>() && !t->is<IR::Type_HeaderUnion>())
     		{
-    			MYDEBUG(std::cout<<"Error: Unknown Type : " << t->toString() << std::endl);
+    			MYDEBUG(std::cout<<__LINE__ <<"Error: Unknown Type : " << t->toString() << std::endl);
     			return(Type::getInt32Ty(TheContext)); 
     		}
-
 
             if(defined_type[t->toString()])
             {
@@ -617,28 +860,20 @@ namespace P4	{
     	// c++ equal => typedef struct x x --> As far as i understood
         else if(t->is<IR::Type_Typedef>())
         {
-            MYDEBUG(std::cout << __LINE__ << std::endl;)
-            // MYDEBUG(std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;)
             const IR::Type_Typedef *x = dynamic_cast<const IR::Type_Typedef *>(t);
             return(getCorrespondingType(x->type)); 
         }
 		else if(t->is<IR::Type_Name>())
 		{
-            MYDEBUG(std::cout << __LINE__ << std::endl;)
 			if(defined_type[t->toString()])
 			{
-                MYDEBUG(std::cout << __LINE__ << std::endl;)
 				return(defined_type[t->toString()]);
 			}
 			// llvm::Type *temp = llvm::StructType::create(TheContext, "struct." + std::string(t->toString()));
             // FillIt(temp, t);
-            CHECK_NULL(t);
-            CHECK_NULL(typeMap);
             auto canon = typeMap->getTypeType(t, true);
             // auto canon = typeMap->getType(t);
-            MYDEBUG(std::cout << __LINE__ << std::endl;)
             defined_type[t->toString()] = getCorrespondingType(canon);
-            MYDEBUG(std::cout << canon << ":" << defined_type[t->toString()] << std::endl;)
             return (defined_type[t->toString()]);
 		}
     	else if(t->is<IR::Type_Tuple>())
@@ -648,13 +883,7 @@ namespace P4	{
     		    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
                 )	
     	}
-		else if(t->is<IR::Type_Void>())
-		{
-            MYDEBUG(
-                std::cout << __LINE__ << std::endl;
-			    std::cout << "Incomplete Function : "<<__LINE__ << " : Not Yet Implemented for " << t->toString()<< std::endl;
-                )
-		}
+
 		else if(t->is<IR::Type_Set>())
 		{
             MYDEBUG(
@@ -726,6 +955,76 @@ namespace P4	{
 		MYDEBUG(std::cout << "Returning Int32 pointer for Incomplete Type" << std::endl;)
     	return(Type::getInt32PtrTy(TheContext));
 	}
+
+
+
+    ///// --> To do very big bit size 
+    unsigned EmitLLVMIR::getByteAlignment(unsigned width) {
+        if (width <= 8)
+            return 8;
+        else if (width <= 16)
+            return 16;
+        else if (width <= 32)
+            return 32;
+        else if (width <= 64)
+            return 64;
+        else
+            // compiled as u8* 
+            return 64;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    //______________________________________________________________________________________________________________________
+
+
+
+
     #define VECTOR_VISIT(V, T, SS)                                                      \
         bool EmitLLVMIR::preorder(const IR:: V <IR::T> *v){                             \
         MYDEBUG(std::cout<<"\n" << SS << "\t "<<*v<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)\
@@ -970,20 +1269,23 @@ namespace P4	{
         }
         */
         if (defined_state.find("reject") == defined_state.end()) {
+            MYDEBUG(std::cout << "Reject State Not Found\n";) // should never reach here
             defined_state["reject"] = BasicBlock::Create(TheContext, "reject", function);
         }
-
+        MYDEBUG(std::cout << __LINE__ <<"\n";)
         SwitchInst *sw = Builder.CreateSwitch(processExpression(t->select,NULL,NULL), defined_state["reject"], t->selectCases.size());
         //comment above line and uncomment below commented code to test selectexpression with dummy select key
         /*
         Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
         SwitchInst *sw = Builder.CreateSwitch(tmp, defined_state["reject"], t->selectCases.size());
         */
-
+        MYDEBUG(std::cout << __LINE__ <<"\n";)
         bool issetdefault = false;
         for (unsigned i=0;i<t->selectCases.size();i++) {
             //visit(t->selectCases[i]);
+            MYDEBUG(std::cout << __LINE__ <<"\n";)
             if (dynamic_cast<const IR::DefaultExpression *>(t->selectCases[i]->keyset)) {
+                MYDEBUG(std::cout << __LINE__ <<"\n";)
                 if (issetdefault) continue;
                 else {
                     issetdefault = true;
@@ -994,15 +1296,16 @@ namespace P4	{
                 }
             }
             else if (dynamic_cast<const IR::Constant *>(t->selectCases[i]->keyset)) {
+                MYDEBUG(std::cout << __LINE__ <<"\n";)
                 if (defined_state.find(t->selectCases[i]->state->path->asString()) == defined_state.end()) {
                     defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, *new const Twine(t->selectCases[i]->state->path->asString()), function);
                 }
                 ConstantInt *onVal = ConstantInt::get(IntegerType::get(TheContext, 64), ((IR::Constant *)(t->selectCases[i]->keyset))->asLong(), true);
-
                 sw->addCase(onVal, defined_state[t->selectCases[i]->state->path->asString()]);
             }
         }
-        return false;
+        MYDEBUG(std::cout << __LINE__ <<"\n";)
+        return true;
     }
 
     bool EmitLLVMIR::preorder(const IR::ListExpression* t)
@@ -1011,11 +1314,7 @@ namespace P4	{
         return true;
     }
 
-    bool EmitLLVMIR::preorder(const IR::MethodCallExpression* t)
-    {
-        MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
-    }
+
 
     bool EmitLLVMIR::preorder(const IR::DefaultExpression* t)
     {
@@ -1036,11 +1335,7 @@ namespace P4	{
         return true;
     }
 
-    bool EmitLLVMIR::preorder(const IR::MethodCallStatement* t)
-    {
-        MYDEBUG(std::cout<<"\nMethodCallStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
-    }
+
 
     bool EmitLLVMIR::preorder(const IR::EmptyStatement* t)
     {
@@ -1097,11 +1392,6 @@ namespace P4	{
         return true;
     }
 
-    bool EmitLLVMIR::preorder(const IR::Method* t)
-    {
-        MYDEBUG(std::cout<<"\nMethod\t "<<t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
-    }
 
     bool EmitLLVMIR::preorder(const IR::Function* t)
     {
@@ -1170,4 +1460,6 @@ namespace P4	{
         return true;
         
     }
+
+
 }

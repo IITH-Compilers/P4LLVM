@@ -53,7 +53,7 @@ limitations under the License.
 
 using namespace llvm;
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 #if VERBOSE
 #ifndef MYDEBUG
@@ -163,7 +163,7 @@ class EmitLLVMIR : public Inspector {
         std::vector<Type*> args;
         FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
         function = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
-        
+
         bbInsert = BasicBlock::Create(TheContext, "entry", function);
         Builder.SetInsertPoint(bbInsert);
         std::ostream& opStream = *openFile(fileName+".ll", true);
@@ -173,7 +173,7 @@ class EmitLLVMIR : public Inspector {
     void dumpLLVMIR() {
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
-        Builder.CreateRetVoid();
+        // Builder.CreateRetVoid();
         TheModule->print(*S,nullptr);
     }
 
