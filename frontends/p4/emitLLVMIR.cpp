@@ -1129,12 +1129,15 @@ namespace P4	{
 
         int actual_argsize = args.size();
 
+        action_call_args[t->name.name] = std::vector<llvm::Value *>(0);
+
         //add more parameters from outer scopes
         for (int i = st.getCurrentScope(); i>=0 ; i--) {
             auto &vars = st.getVars(i);
             for (auto vp : vars) {
                 if (allnames.find(std::string(vp.first)) == allnames.end()) {
                     args.push_back(vp.second->getType());
+                    action_call_args[t->name.name].push_back(vp.second);
                     names.push_back(std::string(vp.first));
                     allnames.insert(std::string(vp.first));
                 }

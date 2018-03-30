@@ -153,6 +153,7 @@ class EmitLLVMIR : public Inspector {
     raw_fd_ostream *S;
     cstring fileName;
     ScopeTable<Value*> st;
+    std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
 
     //IN PROGRESS - used for GEP i.e., from member name get the field index in a struct. all the work related to getelementptr is commented
     //std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
