@@ -161,11 +161,13 @@ class EmitLLVMIR : public Inspector {
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
 
+    std::map<cstring, std::vector<cstring> > action_list_enum;
+
     // Helper Functions 
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
     llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr);
-
+    void createLookUpFunction(StructType *key, StructType *value, StructType *entry, StructType *table);
    public:
     EmitLLVMIR(const IR::P4Program* program, cstring fileName, ReferenceMap* refMap, TypeMap* typeMap) : fileName(fileName), Builder(TheContext), refMap(refMap), typeMap(typeMap) {
         CHECK_NULL(program); 
