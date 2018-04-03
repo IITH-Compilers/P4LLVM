@@ -726,7 +726,7 @@ namespace P4    {
                 dst = Builder.CreateGEP(temp_value, idx);
                 StructType *params_type = (StructType *) defined_type[std::string(function->getName())+"anon"+sout.str()+"_t_param"];
 
-                Value *tmp = CastInst::CreateTruncOrBitCast(dst, PointerType::get(params_type,0), Twine(""), bbInsert); 
+                Value *tmp = Builder.CreateTruncOrBitCast(dst, PointerType::get(params_type,0)); 
                 //fill each field of this struct one by one
                 for (int j=0;j<x->arguments->size();j++) {
                     idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, j, false)));
@@ -757,6 +757,7 @@ namespace P4    {
 
         BasicBlock *bb1 = BasicBlock::Create(TheContext, "default_action", function);
         BasicBlock *bb2 = BasicBlock::Create(TheContext, "choose_action", function);
+        BasicBlock *next = BasicBlock::Create(TheContext, "sw.next", function);
 
 
         Builder.CreateCondBr(eq, bb1, bb2);
@@ -769,6 +770,7 @@ namespace P4    {
         temp = Builder.CreateLoad(temp);
         SwitchInst *sw = Builder.CreateSwitch(temp, bb1, action_list_enum[function->getName().str()].size());
 
+        //TODO Take care of fallthrough for noaction if needed - not sure
         for (int i=0;i<action_list_enum[function->getName().str()].size();i++) {
             BasicBlock *bb = BasicBlock::Create(TheContext, Twine("action_"+action_list_enum[function->getName().str()][i]), function);
             ConstantInt *onVal = ConstantInt::get(TheContext, llvm::APInt(32, i, false));
@@ -782,7 +784,7 @@ namespace P4    {
             sout << i;
             StructType *params_type = (StructType *) defined_type[function->getName().str()+"anon"+sout.str()+"_t_param"];
 
-            temp = CastInst::CreateTruncOrBitCast(temp, PointerType::get(params_type,0), Twine(""), bbInsert);
+            temp = Builder.CreateTruncOrBitCast(temp, PointerType::get(params_type,0));
 
             std::vector<Value*> args;
             for (int j=0;j<params_type->getNumElements();j++) {
@@ -795,14 +797,15 @@ namespace P4    {
                 args.push_back(action_call_args[action_list_enum[function->getName().str()][i]][j]);
             }
             Value *callin2 = Builder.CreateCall(TheModule->getFunction(std::string(action_list_enum[function->getName().str()][i])), args);
-
+            Builder.CreateBr(next);
             Builder.SetInsertPoint(bbInsert);    
         }
 
         //handle default_action
         Builder.SetInsertPoint(bb1);
-        Builder.CreateRetVoid();
-        Builder.SetInsertPoint(bbInsert);
+        Builder.CreateRet(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        Builder.SetInsertPoint(next);
+        bbInsert = next;
         return false;
     }
 
@@ -930,7 +933,7 @@ namespace P4    {
 
             if (e->is<IR::Member>()) {
                 Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
-                int ext_i = structIndexMap[ex->getType()][std::string(e->to<IR::Member>()->member.name)];
+                int ext_i = structIndexMap[((PointerType *)ex->getType())->getElementType()][std::string(e->to<IR::Member>()->member.name)];
 
                 std::vector<Value *> idx;
                 idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
@@ -959,7 +962,7 @@ namespace P4    {
             {
                 return v;
             }
-            return Builder.CreateLoad(v);
+            else return Builder.CreateLoad(v);
         }
 
 
@@ -1253,7 +1256,7 @@ namespace P4    {
     {
         MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         // MYDEBUG(std::cout << t->method << "\n";) // Expression
-// return true;
+        return true;
         // MYDEBUG(std::cout << t->typeArguments << "\n";) // vector of type (just type)
         std::vector<Value *> method_args;
         // for(auto v: *(t->typeArguments))
@@ -1882,7 +1885,7 @@ namespace P4    {
                 if (defined_state.find(t->selectCases[i]->state->path->asString()) == defined_state.end()) {
                     defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(TheContext, Twine(t->selectCases[i]->state->path->asString()), function);
                 }
-                ConstantInt *onVal = ConstantInt::get(IntegerType::get(TheContext, 64), ((IR::Constant *)(t->selectCases[i]->keyset))->asLong(), true);
+                ConstantInt *onVal = (ConstantInt *) processExpression(t->selectCases[i]->keyset);
 
                 sw->addCase(onVal, defined_state[t->selectCases[i]->state->path->asString()]);
             }
