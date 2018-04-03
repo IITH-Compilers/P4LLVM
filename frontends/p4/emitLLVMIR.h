@@ -158,7 +158,7 @@ class EmitLLVMIR : public Inspector {
     std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
     std::map<cstring,  std::vector<bool> > action_call_args_isout;
     //IN PROGRESS - used for GEP i.e., from member name get the field index in a struct. all the work related to getelementptr is commented
-    //std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
+    std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
 
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
@@ -170,6 +170,7 @@ class EmitLLVMIR : public Inspector {
     llvm::Type* getCorrespondingType(const IR::Type *t);
     llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr, bool required_alloca=false);
     void createLookUpFunction(StructType *key, StructType *value, StructType *entry, StructType *table);
+    
    public:
     EmitLLVMIR(const IR::P4Program* program, cstring fileName, ReferenceMap* refMap, TypeMap* typeMap) : fileName(fileName), Builder(TheContext), refMap(refMap), typeMap(typeMap) {
         CHECK_NULL(program); 

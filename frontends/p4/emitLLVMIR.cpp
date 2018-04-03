@@ -67,12 +67,12 @@ namespace P4    {
         StructType *structReg = llvm::StructType::create(TheContext, members, "struct."+t->name); // 
         defined_type[t->externalName()] = structReg;
 
-        /*int i=0;
+        int i=0;
         for(auto x: t->fields)
         {
             structIndexMap[structReg][std::string(x->name.name)] = i;
             i++;
-        }*/
+        }
 
         // alloca = Builder.CreateAlloca(structReg);
         // st.insert("alloca_"+t->getName(),alloca);
@@ -184,6 +184,7 @@ namespace P4    {
         FunctionType *parser_function_type = FunctionType::get(Type::getInt32Ty(TheContext), parser_function_args, false);
         Function *parser_function = Function::Create(parser_function_type, Function::ExternalLinkage,  std::string(t->getName().toString()), TheModule.get());
         Function::arg_iterator args = parser_function->arg_begin();
+        function = parser_function;
 
 
         BasicBlock *init_block = BasicBlock::Create(TheContext, "entry", parser_function);
@@ -402,6 +403,7 @@ namespace P4    {
 
         FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(TheContext), control_function_args, false);
         Function *control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(t->getName().toString()), TheModule.get());
+        function = control_function;
         Function::arg_iterator args = control_function->arg_begin();
 
         BasicBlock *init_block = BasicBlock::Create(TheContext, "entry", control_function);
@@ -463,28 +465,6 @@ namespace P4    {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     bool EmitLLVMIR::preorder(const IR::IfStatement* t) {
         MYDEBUG(std::cout<<"\nIfStatement\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         
@@ -514,6 +494,426 @@ namespace P4    {
         return true;
     }
 
+
+
+
+
+    bool EmitLLVMIR::preorder(const IR::ActionList* t)
+    {
+        MYDEBUG(std::cout<<"\nActionList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        action_list_enum[function->getName().str()] = std::vector<cstring>(0);
+
+        std::vector<Type*> members;
+
+        AllocaInst *alloca;
+
+        int max_size = 0;
+        StructType *action_struct_corr_max = NULL;
+
+        //enum or an integer describing the action
+        members.push_back(Type::getInt32Ty(TheContext));
+
+        for (int i=0;i<t->actionList.size();i++) {
+            action_list_enum[function->getName().str()].push_back(t->actionList[i]->getName().name);
+
+            //add union of parameters for each possible action
+            //first create structures corresponding to the action parameters
+            std::vector<Type*> temp_members;
+
+            Function *f_temp = TheModule->getFunction(std::string(t->actionList[i]->getName().name));
+
+           if (f_temp != NULL) {
+                auto b = f_temp->arg_begin();
+                auto e = f_temp->arg_end();
+                int num_extra = action_call_args[t->actionList[i]->getName()].size();
+                for (int i=0;i<num_extra;i++) {
+                    e--;
+                }
+                while(e!=b) {
+                    temp_members.push_back(b->getType());
+                    b++;
+                }
+            }
+
+            std::stringstream sout;
+            sout << i;
+
+            StructType *temp = llvm::StructType::create(TheContext, temp_members, llvm::StringRef("struct."+std::string(function->getName())+"anon"+sout.str()+"_t_param")); // 
+            defined_type[std::string(function->getName())+"anon"+sout.str()+"_t_param"] = temp;
+
+            /*alloca = Builder.CreateAlloca(temp);
+            alloca->setName(Twine("value_anon"+sout.str()));
+            st.insert("alloca_value_anon"+sout.str(),alloca);*/
+
+            if (max_size <= TheModule->getDataLayout().getTypeAllocSize(temp)) {
+                max_size = TheModule->getDataLayout().getTypeAllocSize(temp);
+                action_struct_corr_max = temp;
+            }
+        }
+
+        members.push_back(action_struct_corr_max);
+
+        StructType *typeValue = llvm::StructType::create(TheContext, members, llvm::StringRef("struct."+std::string(function->getName())+"_t_value")); // 
+        defined_type[std::string(function->getName())+"_t_value"] = typeValue;
+
+
+        StructType *typeKey = (StructType *) defined_type[std::string(function->getName())+"_t_key"];
+        
+        //create type of table_entry
+        members.clear();
+        members.push_back(typeKey);
+        members.push_back(typeValue);
+
+        StructType *typeTableEntry = llvm::StructType::create(TheContext, members, llvm::StringRef("struct."+std::string(function->getName())+"_t_entry")); // 
+        defined_type[std::string(function->getName())+"_t_entry"] = typeTableEntry;
+
+        //create type of table
+        members.clear();
+        members.push_back(Type::getInt32Ty(TheContext));    //current size of table
+
+        ArrayType* arrayType = ArrayType::get(typeTableEntry, 10);  //10 - is capacity , array of table entries
+        members.push_back(arrayType);
+
+        StructType *typeTable = llvm::StructType::create(TheContext, members, llvm::StringRef("struct."+std::string(function->getName())+"_t_table")); // 
+        defined_type[std::string(function->getName())+"_t_table"] = typeTable;
+
+        alloca = Builder.CreateAlloca(typeTable);
+        alloca->setName(Twine("table"));
+        st.insert("table",alloca);
+
+        //set table size to 0
+        std::vector<Value *> idx;
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        Value *cur = Builder.CreateGEP((Value *) alloca, idx);
+        Builder.CreateStore(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)), cur);
+
+
+        //create lookup function
+        //write the table implementation dependent lookup function - right now implementation is array and lookup is bruteforce
+
+        std::vector<Type*> args;
+
+        args.push_back(alloca->getType());
+        args.push_back(PointerType::get(typeKey,0));
+
+        FunctionType *FT = FunctionType::get(PointerType::get(typeValue,0), args, false);
+
+        Function *old_func = function;
+        BasicBlock *old_bb = bbInsert;
+        
+
+        st.enterScope();
+
+        function = Function::Create(FT, Function::ExternalLinkage, Twine(function->getName()+"_t_table_lookup"), TheModule.get());
+        bbInsert = BasicBlock::Create(TheContext, "entry", function);
+        Builder.SetInsertPoint(bbInsert);
+
+        //set names to parameters
+        auto temp_arg = function->arg_begin();
+        temp_arg->setName(Twine("table")), st.insert("table",temp_arg);
+        temp_arg++;
+        temp_arg->setName(Twine("key")), st.insert("key",temp_arg);
+
+        createLookUpFunction(typeKey, typeValue, typeTableEntry, typeTable);
+
+        st.exitScope();
+        //implementation of lookup ends here
+        function = old_func;
+        bbInsert = old_bb;
+        Builder.SetInsertPoint(bbInsert);
+        
+        return false;
+    }
+
+    bool EmitLLVMIR::preorder(const IR::Key* t)
+    {
+        MYDEBUG(std::cout<<"\nKey\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        
+        AllocaInst* alloca;
+        std::vector<Type*> members;
+
+        std::vector<Value *> expr;
+        for(auto x: t->keyElements)
+        {
+            //annotations, matchType, expression
+            visit(x->annotations);
+            visit(x->matchType);
+            expr.push_back(processExpression(x->expression));
+            //comment above line and uncomment below commented code to test with dummy Key fields
+            // Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
+            // expr.push_back(tmp);
+            
+        }
+
+        for (int i=(int)expr.size()-1;i>=0;i--) {
+            members.push_back(expr[i]->getType());
+        }
+
+        StructType *structReg = llvm::StructType::create(TheContext, members, llvm::StringRef("struct."+std::string(function->getName())+"_t_key")); // 
+        defined_type[std::string(function->getName())+"_t_key"] = structReg;
+
+
+        for (int i=0;i<members.size();i++) {
+            std::stringstream sout;
+            sout << members.size()-1-i;
+            structIndexMap[structReg]["field"+sout.str()] = i;
+        }
+
+        alloca = Builder.CreateAlloca(structReg);
+        alloca->setName(Twine("key"));
+        st.insert("key",alloca);
+
+        for (int i=0;i<expr.size();i++) {
+            std::vector<Value *> idx;
+            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, (int)expr.size()-1-i, false)));
+            Value *cur = Builder.CreateGEP((Value *) alloca, idx);
+            Builder.CreateStore(expr[i], cur);
+        }
+
+        return false;
+    }
+
+    bool EmitLLVMIR::preorder(const IR::EntriesList *t)
+    {
+        MYDEBUG(std::cout<<"\nEntriesList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
+        Value *temp_table = st.lookupGlobal("table");
+        std::vector<Value *> idx;
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        Value *temp_size = Builder.CreateGEP(temp_table, idx);
+        for (int i=0;i<t->size();i++) {
+            Value *temp1 = Builder.CreateLoad(temp_size);
+            idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+            Value *temp_entry = Builder.CreateGEP(temp_table, idx);
+            idx.resize(1), idx.push_back(temp1);
+            temp_entry = Builder.CreateGEP(temp_entry, idx);
+
+            //for filling key in entry
+            idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+            Value *temp_key = Builder.CreateGEP(temp_entry, idx);
+            for (int j=0;j<t->entries[i]->keys->components.size();j++) {
+                Value *src = processExpression(t->entries[i]->keys->components[j]);
+                idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, j, false)));
+                Value *dst = Builder.CreateGEP(temp_key, idx);
+
+                MYDEBUG(std::string type_str1;)
+                MYDEBUG(std::string type_str2;)
+                MYDEBUG(llvm::raw_string_ostream rso1(type_str1);)
+                MYDEBUG(llvm::raw_string_ostream rso2(type_str2);)
+                MYDEBUG(src->getType()->print(rso1);)
+                MYDEBUG(dst->getType()->print(rso2);)
+                MYDEBUG(std::cout << rso1.str() << "- lol - " << rso2.str() << std::endl;)
+                Builder.CreateStore(src, dst);
+            }
+
+            //for filling value in entry
+            idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+            Value *temp_value = Builder.CreateGEP(temp_entry, idx);
+            auto x = (IR::MethodCallExpression *) t->entries[i]->action;
+            if (std::find(action_list_enum[function->getName().str()].begin(), action_list_enum[function->getName().str()].end(), ((IR::PathExpression *)(x->method))->path->name.name) != action_list_enum[function->getName().str()].end()) {
+                int enum_idx = std::find(action_list_enum[function->getName().str()].begin(), action_list_enum[function->getName().str()].end(), ((IR::PathExpression *)(x->method))->path->name.name) - action_list_enum[function->getName().str()].begin();
+                //store enum index
+                Value *src = ConstantInt::get(TheContext, llvm::APInt(32, enum_idx, false));
+                idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+                Value *dst = Builder.CreateGEP(temp_value, idx);
+                Builder.CreateStore(src, dst);
+                //store parameters
+                std::stringstream sout;
+                sout << enum_idx;
+                idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+                dst = Builder.CreateGEP(temp_value, idx);
+                StructType *params_type = (StructType *) defined_type[std::string(function->getName())+"anon"+sout.str()+"_t_param"];
+
+                Value *tmp = CastInst::CreateTruncOrBitCast(dst, PointerType::get(params_type,0), Twine(""), bbInsert); 
+                //fill each field of this struct one by one
+                for (int j=0;j<x->arguments->size();j++) {
+                    idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, j, false)));
+                    dst = Builder.CreateGEP(dst, idx);
+                    src = processExpression((*(x->arguments))[j]);
+                    Builder.CreateStore(src, dst);
+                }
+                //done!
+            }
+            else {
+                //unknown action
+            }
+
+            temp1 = Builder.CreateAdd(temp1, ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+            Builder.CreateStore(temp1, temp_size);
+            //change size -> size + 1
+        }
+
+        //CODE FOR TABLE APPLY - change the place of this code later
+        std::vector<Value*> args;
+        args.push_back(st.lookupGlobal("table"));
+        args.push_back(st.lookupGlobal("key"));
+        /*Value *temp = Builder.CreateAlloca(PointerType::get(defined_type[std::string(function->getName())+"_t_value"]));
+        temp = Builder.CreateLoad(temp);*/
+        //lookup
+        Value *callin = Builder.CreateCall(TheModule->getFunction(function->getName().str()+"_t_table_lookup"), args);
+        Value *eq = Builder.CreateICmpEQ(callin, ConstantPointerNull::get((PointerType *) callin->getType()));
+
+        BasicBlock *bb1 = BasicBlock::Create(TheContext, "default_action", function);
+        BasicBlock *bb2 = BasicBlock::Create(TheContext, "choose_action", function);
+
+
+        Builder.CreateCondBr(eq, bb1, bb2);
+        Builder.SetInsertPoint(bb2);
+        bbInsert = bb2;
+
+
+        idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false))); 
+        Value *temp = Builder.CreateGEP(callin, idx);
+        temp = Builder.CreateLoad(temp);
+        SwitchInst *sw = Builder.CreateSwitch(temp, bb1, action_list_enum[function->getName().str()].size());
+
+        for (int i=0;i<action_list_enum[function->getName().str()].size();i++) {
+            BasicBlock *bb = BasicBlock::Create(TheContext, Twine("action_"+action_list_enum[function->getName().str()][i]), function);
+            ConstantInt *onVal = ConstantInt::get(TheContext, llvm::APInt(32, i, false));
+            sw->addCase(onVal, bb);
+
+            Builder.SetInsertPoint(bb);
+            idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 1, false))); 
+            temp = Builder.CreateGEP(callin, idx);
+
+            std::stringstream sout;
+            sout << i;
+            StructType *params_type = (StructType *) defined_type[function->getName().str()+"anon"+sout.str()+"_t_param"];
+
+            temp = CastInst::CreateTruncOrBitCast(temp, PointerType::get(params_type,0), Twine(""), bbInsert);
+
+            std::vector<Value*> args;
+            for (int j=0;j<params_type->getNumElements();j++) {
+                idx.resize(1), idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, j, false)));
+                Value* arg = Builder.CreateGEP(callin, idx);
+                arg = Builder.CreateLoad(arg);
+                args.push_back(arg);
+            }
+            for (int j=0;j<action_call_args[action_list_enum[function->getName().str()][i]].size();j++) {
+                args.push_back(action_call_args[action_list_enum[function->getName().str()][i]][j]);
+            }
+            Value *callin2 = Builder.CreateCall(TheModule->getFunction(std::string(action_list_enum[function->getName().str()][i])), args);
+
+            Builder.SetInsertPoint(bbInsert);    
+        }
+
+        //handle default_action
+        Builder.SetInsertPoint(bb1);
+        Builder.CreateRetVoid();
+        Builder.SetInsertPoint(bbInsert);
+        return false;
+    }
+
+
+        void EmitLLVMIR::createLookUpFunction(StructType *key, StructType *value, StructType *entry, StructType *table) 
+    {
+        std::vector<Value *> idx;
+        Value *temp, *temp1, *temp2, *temp3, *temp4, *temp5;
+        BasicBlock *tempbb1, *tempbb2, *tempbb3;
+        temp = Builder.CreateAlloca(PointerType::get(value,0));
+        temp->setName("ret.addr"), st.insert("ret.addr",temp);
+        temp = Builder.CreateAlloca(PointerType::get(key,0));
+        temp->setName("key.addr"),st.insert("key.addr", temp);
+        temp = Builder.CreateAlloca(PointerType::get(table,0));
+        temp->setName("table.addr"),st.insert("table.addr", temp);
+        temp = Builder.CreateAlloca(Type::getInt32Ty(TheContext));
+        temp->setName("i"),st.insert("i", temp);
+        Builder.CreateStore(ConstantPointerNull::get(PointerType::get(value,0)), st.lookupLocal("ret.addr"));
+        Builder.CreateStore(st.lookupLocal("key"), st.lookupLocal("key.addr"));
+        Builder.CreateStore(st.lookupLocal("table"), st.lookupLocal("table.addr"));
+        Builder.CreateStore(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)), st.lookupLocal("i"));
+        bbInsert = BasicBlock::Create(TheContext, "for.cond", function);
+        Builder.CreateBr(bbInsert);
+        
+        // for.cond
+        Builder.SetInsertPoint(bbInsert);
+        temp1 = Builder.CreateLoad(st.lookupLocal("i"));
+        temp2 = Builder.CreateLoad(st.lookupLocal("table.addr"));
+
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        temp3 = Builder.CreateGEP(temp2, idx);
+        temp3 = Builder.CreateLoad(temp3);
+        temp = Builder.CreateICmpSLT(temp1,temp3);
+        tempbb1 = BasicBlock::Create(TheContext, "for.body", function);
+        tempbb2 = BasicBlock::Create(TheContext, "for.end", function);
+        Builder.CreateCondBr(temp, tempbb1, tempbb2);
+        
+        // for.end
+        Builder.SetInsertPoint(tempbb2);
+        temp = Builder.CreateLoad(st.lookupLocal("ret.addr"));
+        Builder.CreateRet(temp);
+
+        //for.body
+        Builder.SetInsertPoint(tempbb1);
+        temp = Builder.CreateLoad(st.lookupLocal("table.addr"));
+        
+        idx.clear();
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+        temp = Builder.CreateGEP(temp, idx);
+        temp1 = Builder.CreateLoad(st.lookupLocal("i"));
+
+        idx.clear();
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(temp1);
+        temp1 = Builder.CreateGEP(temp, idx);
+
+        idx.clear();
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        temp2 = Builder.CreateGEP(temp1, idx);
+        temp3 = Builder.CreateLoad(st.lookupLocal("key.addr"));
+        for (int i=0;i<key->getNumElements();i++) {
+            idx.clear();
+            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, i, false)));
+            temp4 = Builder.CreateGEP(temp2, idx);
+            temp5 = Builder.CreateGEP(temp3, idx);
+
+            //compare them
+            if (i != key->getNumElements()-1) tempbb1 = BasicBlock::Create(TheContext, "if.cont", function);
+            else tempbb1 = BasicBlock::Create(TheContext, "if.then", function);
+            if (i==0) tempbb2 = BasicBlock::Create(TheContext, "if.end", function);
+            temp = Builder.CreateICmpEQ(temp4, temp5);
+            Builder.CreateCondBr(temp, tempbb1, tempbb2);
+            if (i != key->getNumElements()-1) Builder.SetInsertPoint(tempbb1);
+        }
+
+        //if.then
+        Builder.SetInsertPoint(tempbb1);
+
+        idx.clear();
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+        idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+        temp1 = Builder.CreateGEP(temp1,idx);
+        Builder.CreateStore(temp1, st.lookupLocal("ret.addr"));
+
+        Builder.CreateBr(tempbb2);
+
+        //if.end
+        Builder.SetInsertPoint(tempbb2);
+        tempbb2 = BasicBlock::Create(TheContext, "for.inc", function);
+        Builder.CreateBr(tempbb2);
+
+        //for.inc
+        Builder.SetInsertPoint(tempbb2);
+        temp = Builder.CreateLoad(st.lookupLocal("i"));
+        temp = Builder.CreateAdd(temp, ConstantInt::get(TheContext, llvm::APInt(32, 1, false)));
+        Builder.CreateStore(temp, st.lookupLocal("i"));
+        Builder.CreateBr(bbInsert);
+    }
+
+
+
+
+
+
+
+
+
     Value* EmitLLVMIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullptr*/, BasicBlock* bbElse/*=nullptr*/, bool required_alloca /*=false*/) {
         assert(e != nullptr);
         if(e->is<IR::Operation_Unary>())    {
@@ -528,15 +928,17 @@ namespace P4    {
             if(e->is<IR::LNot>())
                 return Builder.CreateICmpEQ(exp, ConstantInt::get(exp->getType(),0));
 
-            /*if (e->is<IR::Member>()) {
-                Value *ex = processExpression(e->to<IR::Member>()->expr);
+            if (e->is<IR::Member>()) {
+                Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
                 int ext_i = structIndexMap[ex->getType()][std::string(e->to<IR::Member>()->member.name)];
 
                 std::vector<Value *> idx;
                 idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
                 idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, ext_i, false)));
-                return Builder.CreateGEP(ex, idx);
-            }*/
+                ex = Builder.CreateGEP(ex, idx);
+                if (required_alloca) return ex;
+                else return Builder.CreateLoad(ex);
+            }
         }
         if(e->is<IR::BoolLiteral>())    {
             const IR::BoolLiteral* c = e->to<IR::BoolLiteral>();            
@@ -715,6 +1117,7 @@ namespace P4    {
         }*/
 
     }
+
     bool EmitLLVMIR::preorder(const IR::P4Action* t)
     {
         MYDEBUG(std::cout<<"\nP4Action\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
@@ -850,7 +1253,7 @@ namespace P4    {
     {
         MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         // MYDEBUG(std::cout << t->method << "\n";) // Expression
-
+// return true;
         // MYDEBUG(std::cout << t->typeArguments << "\n";) // vector of type (just type)
         std::vector<Value *> method_args;
         // for(auto v: *(t->typeArguments))
@@ -1455,11 +1858,11 @@ namespace P4    {
             defined_state["reject"] = BasicBlock::Create(TheContext, "reject", function);
         }
 
-        SwitchInst *sw = Builder.CreateSwitch(processExpression(t->select,NULL,NULL), defined_state["reject"], t->selectCases.size());
+        SwitchInst *sw = Builder.CreateSwitch(processExpression(t->select->components[0],NULL,NULL), defined_state["reject"], t->selectCases.size());
         //comment above line and uncomment below commented code to test selectexpression with dummy select key
         
-        /*Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
-        SwitchInst *sw = Builder.CreateSwitch(tmp, defined_state["reject"], t->selectCases.size());*/
+        // Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
+        // SwitchInst *sw = Builder.CreateSwitch(tmp, defined_state["reject"], t->selectCases.size());
         
 
         bool issetdefault = false;
@@ -1584,56 +1987,7 @@ namespace P4    {
         return true;
     }
 
-    bool EmitLLVMIR::preorder(const IR::ActionList* t)
-    {
-        MYDEBUG(std::cout<<"\nActionList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
-    }
 
-    bool EmitLLVMIR::preorder(const IR::Key* t)
-    {
-        MYDEBUG(std::cout<<"\nKey\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        
-        AllocaInst* alloca;
-        std::vector<Type*> members;
-
-        std::vector<Value *> expr;
-        for(auto x: t->keyElements)
-        {
-            //annotations, matchType, expression
-            visit(x->annotations);
-            visit(x->matchType);
-            expr.push_back(processExpression(x->expression));
-        }
-
-        for (int i=(int)expr.size()-1;i>=0;i--) {
-            members.push_back(expr[i]->getType());
-        }
-
-        StructType *structReg = llvm::StructType::create(TheContext, members, llvm::StringRef("struct."+std::string(function->getName())+"_t_key")); // 
-        defined_type[std::string(function->getName())+"_t_key"] = structReg;
-
-
-        /*for (int i=0;i<members.size();i++) {
-            std::stringstream sout;
-            sout << members.size()-1-i;
-            structIndexMap[structReg]["field"+sout.str()] = i;
-        }*/
-
-        alloca = Builder.CreateAlloca(structReg);
-        alloca->setName(Twine("key"));
-        st.insert("alloca_key",alloca);
-
-        for (int i=0;i<expr.size();i++) {
-            std::vector<Value *> idx;
-            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
-            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, (int)expr.size()-1-i, false)));
-            Value *cur = Builder.CreateGEP((Value *) alloca, idx);
-            Builder.CreateStore(expr[i], cur);
-        }
-
-        return false;
-    }
 
     bool EmitLLVMIR::preorder(const IR::Property* t)
     {
@@ -1644,12 +1998,6 @@ namespace P4    {
     bool EmitLLVMIR::preorder(const IR::TableProperties* t)
     {
         MYDEBUG(std::cout<<"\nTableProperties\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        return true;
-    }
-
-    bool EmitLLVMIR::preorder(const IR::EntriesList *t)
-    {
-        MYDEBUG(std::cout<<"\nEntriesList\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
         return true;
     }
 
