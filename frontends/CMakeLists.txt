@@ -152,6 +152,8 @@ set (PARSER_HDRS
   parsers/parserDriver.h
   )
 
+include_directories(${LLVM_INCLUDE_DIRS})
+
 macro(add_parser pname)
   add_custom_target (mk${pname}dirs
     ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/parsers/${pname})
