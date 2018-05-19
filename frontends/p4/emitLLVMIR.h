@@ -53,14 +53,14 @@ limitations under the License.
 
 using namespace llvm;
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 #if VERBOSE
 #ifndef MYDEBUG
     #define MYDEBUG(x) x
 #endif
 #else 
-    #define MYDEBUG(x) x
+    #define MYDEBUG(x) 
 #endif
 
 #ifndef REPORTBUG
@@ -138,6 +138,7 @@ class ScopeTable{
         return scope;
     }
     std::map<std::string, T>& getVars(int sc) {
+        std::cout << "sc = " << sc << "scope = " << scope << std::endl; 
         assert(sc>=0 && sc<=scope);
         return dict.at(sc);
     }
@@ -192,7 +193,9 @@ class EmitLLVMIR : public Inspector {
     void dumpLLVMIR() {
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
+        assert(!TheModule->empty() && "module is empty");
         TheModule->print(*S,nullptr);
+        TheModule->dump();
     }
 
     // Visitor function

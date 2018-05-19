@@ -25,6 +25,9 @@ limitations under the License.
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/DerivedTypes.h"
 
+#include "methodInstance.h"
+
+
 namespace P4    {
     ///// --> To do very big bit size 
     unsigned EmitLLVMIR::getByteAlignment(unsigned width) {
@@ -64,6 +67,9 @@ namespace P4    {
         {
             members.push_back(getCorrespondingType(x->type)); // for int and all
         }
+        if(t->is<IR::Type_Header>())    {
+            members.push_back(getCorrespondingType(IR::Type_Boolean::get()));
+        }
         StructType *structReg = llvm::StructType::create(TheContext, members, "struct."+t->name); // 
         defined_type[t->externalName()] = structReg;
 
@@ -73,7 +79,8 @@ namespace P4    {
             structIndexMap[structReg][std::string(x->name.name)] = i;
             i++;
         }
-
+        structIndexMap[structReg]["valid_bit"] = i;
+        
         // alloca = Builder.CreateAlloca(structReg);
         // st.insert("alloca_"+t->getName(),alloca);
         return true;
@@ -439,23 +446,21 @@ namespace P4    {
         }
         // visit(t->annotations);
         // visit(t->getTypeParameters());    // visits TypeParameters
-        std::cout << "FLAG\t" << __LINE__ << "\n";
+        MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";)
         for (auto p : t->getApplyParameters()->parameters) {
             auto type = typeMap->getType(p);
             bool initialized = (p->direction == IR::Direction::In || p->direction == IR::Direction::InOut);
             // auto value = factory->create(type, !initialized); // Create type declaration
         }  
         MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";);
-        std::cout << "FLAG\t" << __LINE__ << "\n";
+     
         if (t->constructorParams->size() != 0) 
             visit(t->constructorParams); //visits Vector -> ParameterList
         visit(&t->controlLocals); // visits Vector -> Declaration 
         //Declare basis block for each state
-        std::cout << "FLAG\t" << __LINE__ << "\n";
         MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";);
         visit(t->body);
         st.exitScope();
-        std::cout << "FLAG\t" << __LINE__ << "\n";
         MYDEBUG(std::cout << "FLAG\t" << __LINE__<< "\n";);
         Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
         return true;
@@ -470,13 +475,20 @@ namespace P4    {
         
         BasicBlock* bbIf = BasicBlock::Create(TheContext, "if.then", function);
         BasicBlock* bbElse = BasicBlock::Create(TheContext, "if.else", function);
+        // if(t->condition->is<IR::MethodCallStatement>())  {MYDEBUG(std::cout<<"its true";)}
         Value* cond = processExpression(t->condition, bbIf, bbElse);
+        MYDEBUG(std::cout << "processed expression for if condition\n";)
         BasicBlock* bbEnd = BasicBlock::Create(TheContext, "if.end", function);
         
         //To handle cases like if(a){//dosomething;}
         //Here 'a' is a PathExpression which would return a LoadInst on processing
-        if(isa<LoadInst>(cond)) 
+        if(isa<LoadInst>(cond)) {
+            MYDEBUG(std::cout << "Its a load inst\n";)
+            cond->dump();
+            cond->getType()->dump();
             cond = Builder.CreateICmpEQ(cond, ConstantInt::get(cond->getType(),1));
+            MYDEBUG(std::cout << "created a icmp eq\n";)
+        }
 
         Builder.CreateCondBr(cond, bbIf, bbElse);
         MYDEBUG(std::cout<< "SetInsertPoint = Ifcondition\n";)
@@ -916,8 +928,8 @@ namespace P4    {
 
 
 
-
     Value* EmitLLVMIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullptr*/, BasicBlock* bbElse/*=nullptr*/, bool required_alloca /*=false*/) {
+
         assert(e != nullptr);
         if(e->is<IR::Operation_Unary>())    {
             const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
@@ -932,13 +944,18 @@ namespace P4    {
                 return Builder.CreateICmpEQ(exp, ConstantInt::get(exp->getType(),0));
 
             if (e->is<IR::Member>()) {
+                MYDEBUG(std::cout << "inside member handling of processexpression\n";)
                 Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
+                ex->dump();
+                MYDEBUG(std::cout << e->to<IR::Member>()->member.name << std::endl;)
                 int ext_i = structIndexMap[((PointerType *)ex->getType())->getElementType()][std::string(e->to<IR::Member>()->member.name)];
-
+                MYDEBUG(std::cout << "processed expression inside member, retrieved from structIndexMap as - " << ext_i << std::endl;)
                 std::vector<Value *> idx;
                 idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
                 idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, ext_i, false)));
                 ex = Builder.CreateGEP(ex, idx);
+                MYDEBUG(std::cout << "created GEP\n";)
+                MYDEBUG(ex->dump();)
                 if (required_alloca) return ex;
                 else return Builder.CreateLoad(ex);
             }
@@ -1119,6 +1136,68 @@ namespace P4    {
 
         }*/
 
+        if(e->is<IR::MethodCallExpression>())    {
+            MYDEBUG(std::cout<<"caught mcs\n";)
+            // visit(e);
+            const IR::MethodCallExpression* mce = e->to<IR::MethodCallExpression>();            
+            auto mi = P4::MethodInstance::resolve(mce,refMap,typeMap);
+            // auto apply = mi->to<P4::ApplyMethod>();
+            // if (apply != nullptr) {
+            //     processApply(apply);
+            //     return false;
+            // }
+            // auto ef = mi->to<P4::ExternFunction>();
+            // if (ef != nullptr) {
+            //     processFunction(ef);
+            //     return false;
+            // }
+            // auto ext = mi->to<P4::ExternMethod>();
+            // if (ext != nullptr) {
+            //     processMethod(ext);
+            //     return false;
+            // }
+            auto bim = mi->to<P4::BuiltInMethod>();
+            if (bim != nullptr) {
+                if (bim->name == IR::Type_Header::isValid) {
+                    // visit(bim->appliedTo);
+                    //write code to return last element of struct
+                    Value* alloca = processExpression(bim->appliedTo, nullptr, nullptr, true);               
+                    if(isa<GetElementPtrInst>(alloca)){
+                        alloca->getType()->dump();
+                        // MYDEBUG(std::cout << "processed expressioninside member, retrieved from structIndexMap as - " << ext_i << std::endl;)
+                        if(isa<PointerType>(alloca->getType())) {
+                            auto pt = dyn_cast<PointerType>(alloca->getType());
+                            unsigned i = structIndexMap[pt->getElementType()].size();
+                            MYDEBUG(std::cout << "value of i = " << i << std::endl;)
+                            for(auto x : structIndexMap)    {
+                                x.first->dump();
+                            }
+                            std::vector<Value *> idx;
+                            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, 0, false)));
+                            idx.push_back(ConstantInt::get(TheContext, llvm::APInt(32, i-1, false)));
+                            auto ex = Builder.CreateGEP(alloca, idx);
+                            ex->dump();
+                            MYDEBUG(std::cout << "returning GEP from mce\n";)
+                            return Builder.CreateLoad(ex);
+                        }
+                    }
+                } 
+                else if (bim->name == IR::Type_Header::setValid) {
+                    visit(bim->appliedTo);
+                    //set last element of struct to true
+                    auto value = processExpression(bim->appliedTo, nullptr, nullptr, true);
+                    return Builder.CreateStore(ConstantInt::get(Type::getInt8Ty(TheContext), 1),value);                               
+                } 
+                else if (bim->name == IR::Type_Header::setInvalid) {
+                    visit(bim->appliedTo);
+                    //set last element of struct to false
+                    auto value = processExpression(bim->appliedTo, nullptr, nullptr, true);
+                    return Builder.CreateStore(ConstantInt::get(Type::getInt8Ty(TheContext), 0),value);
+                }
+            }
+        }
+        ::error("Returning nullptr in processExpression");        
+        return nullptr;
     }
 
     bool EmitLLVMIR::preorder(const IR::P4Action* t)
@@ -1162,7 +1241,7 @@ namespace P4    {
         //add more parameters from outer scopes
 
 
-        for (int i = st.getCurrentScope(); i>=st.getCurrentScope()-1 ; i--) {
+        for (int i = st.getCurrentScope(); i>=st.getCurrentScope()-1 && i>=0 ; i--) {
             auto &vars = st.getVars(i);
             for (auto vp : vars) {
                 if (allnames.find(std::string(vp.first)) == allnames.end()) {
@@ -1252,80 +1331,9 @@ namespace P4    {
 
 
 
-    bool EmitLLVMIR::preorder(const IR::MethodCallExpression* t)
+    bool EmitLLVMIR::preorder(const IR::MethodCallExpression* expression)
     {
-        MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*t<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-        // MYDEBUG(std::cout << t->method << "\n";) // Expression
-        return true;
-        // MYDEBUG(std::cout << t->typeArguments << "\n";) // vector of type (just type)
-        std::vector<Value *> method_args;
-        // for(auto v: *(t->typeArguments))
-        // {
-        //     std::cout << "Type Argument: " << v << "\n";
-        // }
-
-        // llvm::Type *method_returnType = getCorrespondingType(t->type->returnType);
-        // Templates define (t->type->getTypeParameters())
-        int iterator=0;
-        for(auto p : *(t->arguments))
-        {
-            Value *v;
-            if(action_call_args_isout[std::string(t->method->to<IR::PathExpression>()->path->name.name)][iterator++])
-            {
-                // if(p)
-                v = processExpression(p, nullptr, nullptr, true);
-            }
-            else
-            {
-                v = processExpression(p);  
-            }
-            // std::cout << "arguments are ";
-            // v->dump();
-            // std::cout << std::endl;
-            method_args.push_back(v);
-            // auto llvm_type = typeMap->getType(p);
-            // // make that type as pointer
-            // auto pointerToType = llvm::PointerType::get(llvm_type);
-        }
-
-
-
-        for (auto args : action_call_args[std::string(t->method->to<IR::PathExpression>()->path->name.name)])
-        {
-            // args->dump();
-            // auto x = Builder.CreateLoad(args);
-            // method_args.push_back(x);
-            method_args.push_back(args);
-
-        }
-        
-        CallInst *methodcallinst = Builder.CreateCall (TheModule.get()->getFunction(std::string(t->method->to<IR::PathExpression>()->path->name.name)), method_args);
-
-
-
-        // std::cout << "REACHED " << __LINE__ << std::endl;
-        // std::cout << TheModule.get()->getFunction(std::string(t->method->to<IR::PathExpression>()->path->name.name)) << std::endl;
-        // FunctionType *method_type = FunctionType::get(method_returnType, method_args, false);
-        // Function *method_function = Function::Create(method_type, Function::ExternalLinkage,  std::string(t->getName().toString()), TheModule.get());
-        // Function::arg_iterator args = method_function->arg_begin();
-        // for (auto p : t->type->parameters)
-        // {
-        //     args->setName(std::string(p->name.name));
-        //     args++;
-
-
-        // MYDEBUG(std::cout << t->arguments << "\n";) // vector of argument (value)
-        // MYDEBUG(std::cout << t->type << "\n";) // vector of argument (value)
-
-        // visit(t->method); // Expression
-
-        
-        // bool first = true;
-        // for (auto a  : *t->arguments) { // vector of expression
-        //     // visit(a);
-
-        // }
-        return true;
+        MYDEBUG(std::cout<<"\nMethodCallExpression\t "<<*expression<<"\ti = "<<i++<<"\n-------------------------------------------------------------------------------------------------------------\n";)
     }
     bool EmitLLVMIR::preorder(const IR::MethodCallStatement* t)
     {
