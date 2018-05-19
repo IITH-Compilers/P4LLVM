@@ -35,6 +35,7 @@ OPTION (ENABLE_BMV2 "Build the BMV2 backend (required for the full test suite)" 
 OPTION (ENABLE_EBPF "Build the EBPF backend (required for the full test suite)" ON)
 OPTION (ENABLE_P4TEST "Build the P4Test backend (required for the full test suite)" ON)
 OPTION (ENABLE_P4C_GRAPHS "Build the p4c-graphs backend" ON)
+OPTION (ENABLE_LLVMIR "Build the LLVMIR backed" ON)
 
 if (NOT $ENV{P4C_VERSION} STREQUAL "")
   set (P4C_VERSION $ENV{P4C_VERSION})
@@ -242,7 +243,9 @@ endif ()
 if (ENABLE_GTESTS)
   add_subdirectory (test)
 endif ()
-
+if (ENABLE_LLVMIR)
+    add_subdirectory(backends/llvmir)
+endif ()
 # IR Generation
 set_source_files_properties(${IR_GENERATOR} PROPERTIES GENERATED TRUE)
 
