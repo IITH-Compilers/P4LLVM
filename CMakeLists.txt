@@ -244,7 +244,7 @@ if (ENABLE_GTESTS)
   add_subdirectory (test)
 endif ()
 if (ENABLE_LLVMIR)
-    add_subdirectory(backends/llvmir)
+    add_subdirectory(backends/llbmv2)
 endif ()
 # IR Generation
 set_source_files_properties(${IR_GENERATOR} PROPERTIES GENERATED TRUE)

@@ -36,7 +36,7 @@ limitations under the License.
 #include "JsonObjects.h"
 #include "extractArchInfo.h"
 
-namespace BMV2 {
+namespace LLBMV2 {
 
 static void log_dump1(const IR::Node *node, const char *head) {
     if (node) {
@@ -77,7 +77,7 @@ are in the specified set.
 For example, we expect that the code in ingress and egress will have complex
 expression removed.
 */
-class ProcessControls : public BMV2::RemoveComplexExpressionsPolicy {
+class ProcessControls : public LLBMV2::RemoveComplexExpressionsPolicy {
     const std::set<cstring> *process;
 
  public:
@@ -155,7 +155,7 @@ void Backend::convert(BMV2Options& options) {
     register_arrays = mkArrayField(&jsonTop, "register_arrays");
     jsonTop.emplace("calculations", json->calculations);
     learn_lists = mkArrayField(&jsonTop, "learn_lists");
-    BMV2::nextId("learn_lists");
+    LLBMV2::nextId("learn_lists");
     jsonTop.emplace("actions", json->actions);
     jsonTop.emplace("pipelines", json->pipelines);
     jsonTop.emplace("checksums", json->checksums);
@@ -191,11 +191,11 @@ void Backend::convert(BMV2Options& options) {
     // if (psa) tlb->apply(new ConvertExterns());
     PassManager codegen_passes = {
         new ConvertHeaders(this, scalarsName),
-        new ConvertExterns(this),  // only run when target == PSA
-        new ConvertParser(this),
-        new ConvertActions(this),
-        new ConvertControl(this),
-        new ConvertDeparser(this),
+        // new ConvertExterns(this),  // only run when target == PSA
+        // new ConvertParser(this),
+        // new ConvertActions(this),
+        // new ConvertControl(this),
+        // new ConvertDeparser(this),
     };
 
     codegen_passes.setName("CodeGen");
@@ -205,7 +205,7 @@ void Backend::convert(BMV2Options& options) {
         return;
 
     (void)toplevel->apply(ConvertGlobals(this));
-    main->apply(codegen_passes);
+    toplevel->getProgram()->apply(codegen_passes);
 }
 
 bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
@@ -243,4 +243,87 @@ bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
     }
 }
 
-}  // namespace BMV2
+llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
+    assert(t != nullptr && "Type cannot be empty");
+
+    std::cout << *t << " searching for type in getcorrespondingtype" << std::endl;
+
+    if(t->is<IR::Type_Void>()) {
+        return llvm::Type::getVoidTy(TheContext);
+    }
+    
+    else if(t->is<IR::Type_Boolean>()) {
+        llvm::Type *temp = Type::getInt8Ty(TheContext);                         
+        defined_type[t->toString()] = temp;
+        return temp;
+    }
+    
+    // if int<> or bit<> /// bit<32> x; /// The type of x is Type_Bits(32); /// The type of 'bit<32>' is Type_Type(Type_Bits(32))
+    else if(t->is<IR::Type_Bits>()) { // Bot int <> and bit<> passes this check
+        const IR::Type_Bits *x =  dynamic_cast<const IR::Type_Bits *>(t);
+        int width = x->width_bits();
+        // To do this --> How to implement unsigned and signed int in llvm
+        // Right now they both are same
+        if(x->isSigned) {   
+            llvm::Type *temp = Type::getIntNTy(TheContext, width);                
+            defined_type[t->toString()] = temp;
+            return temp;
+        }
+        else {   
+            llvm::Type *temp = Type::getIntNTy(TheContext, width);
+            defined_type[t->toString()] = temp;
+            return temp;
+        }
+    }
+    
+    // Derived Types
+    else if (t->is<IR::Type_StructLike>()) {
+        assert((t->is<IR::Type_Struct>() || t->is<IR::Type_Header>() || t->is<IR::Type_HeaderUnion>()) && "Unhandled Type_StructLike");
+
+        if(defined_type[t->toString()]) {
+            llvm::Type *x = defined_type[t->toString()];
+            llvm::StructType *y = dyn_cast<llvm::StructType>(x);
+            if(!y->isOpaque()) // if opaque then define it
+                return(x);
+        }
+
+        const IR::Type_StructLike *strct = dynamic_cast<const IR::Type_StructLike *>(t);
+
+        // Vector to Store attributes(variables) of struct
+        std::vector<Type*> members;
+        for (auto f : strct->fields)
+            members.push_back(getCorrespondingType(f->type));
+
+        llvm::Type *temp =llvm::StructType::get(TheContext, members);
+        defined_type[t->toString()] = temp;
+        return temp;
+    }
+
+    //eg-> header Ethernet_t is refered by Ethernet_t (type name is Ethernet_t) 
+    // c++ equal => typedef struct x x
+    else if(t->is<IR::Type_Typedef>()) {
+        const IR::Type_Typedef *x = dynamic_cast<const IR::Type_Typedef *>(t);
+        return(getCorrespondingType(x->type)); 
+    }
+
+    else if(t->is<IR::Type_Name>()) {
+        if(defined_type[t->toString()]) {
+            return(defined_type[t->toString()]);
+        }
+        auto canon = typeMap->getTypeType(t, true);
+        defined_type[t->toString()] = getCorrespondingType(canon);
+        return defined_type[t->toString()];
+    }
+
+    else if(t->is<IR::Type_Extern>()) {
+        //return metadata
+
+        return nullptr;
+    }
+
+
+    llvm_unreachable("Unhandled type in getCorrespondingType()");
+    return nullptr;
+}
+
+}  // namespace LLBMV2
