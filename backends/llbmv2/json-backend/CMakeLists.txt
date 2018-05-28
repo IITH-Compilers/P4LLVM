@@ -19,6 +19,10 @@ target_compile_features(LLVMJsonBackend PRIVATE cxx_range_for cxx_auto_type)
 set_target_properties(LLVMJsonBackend PROPERTIES
     COMPILE_FLAGS "-fno-rtti"
 )
+# Can add those libraries that are not already present in 'p4c-llbm2-ss' binary
+llvm_map_components_to_libnames(llvm_libs)
+
+target_link_libraries (LLVMJsonBackend ${llvm_libs} )
 
 # Get proper shared-library behavior (where symbols are not necessarily
 # resolved when the shared library is linked) on OS X.

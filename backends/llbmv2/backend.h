@@ -171,8 +171,8 @@ public:
         Builder(TheContext), 
         fileName(fileName) {
             refMap->setIsV1(isV1); 
-            setName("BackEnd"); 
-            TheModule = llvm::make_unique<Module>("p4Code", TheContext);
+            setName("BackEnd");
+            TheModule = llvm::make_unique<Module>(llvm::StringRef(fileName), TheContext);
             std::vector<Type*> args;
             FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
             function = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
