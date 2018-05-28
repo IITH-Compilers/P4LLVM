@@ -23,6 +23,7 @@ limitations under the License.
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "backend.h"
 #include "expression.h"
+#include "toIR.h"
 
 namespace LLBMV2 {
 
@@ -30,35 +31,28 @@ class JsonObjects;
 
 class ParserConverter : public Inspector {
     Backend* backend;
+    ToIR* toIR;
     P4::ReferenceMap*    refMap;
     P4::TypeMap*         typeMap;
-    LLBMV2::JsonObjects*   json;
-    ExpressionConverter* conv;
     P4::P4CoreLibrary&   corelib;
-    std::map<const IR::P4Parser*, Util::IJson*> parser_map;
-    std::map<const IR::ParserState*, Util::IJson*> state_map;
-    std::vector<Util::IJson*> context;
+    Value* llvmValue;    
 
  protected:
-    void convertSimpleKey(const IR::Expression* keySet, mpz_class& value, mpz_class& mask) const;
-    unsigned combine(const IR::Expression* keySet, const IR::ListExpression* select,
-                     mpz_class& value, mpz_class& mask) const;
-    Util::IJson* stateName(IR::ID state);
-    Util::IJson* toJson(const IR::P4Parser* cont);
-    Util::IJson* toJson(const IR::ParserState* state);
-    Util::IJson* convertParserStatement(const IR::StatOrDecl* stat);
-    Util::IJson* convertSelectKey(const IR::SelectExpression* expr);
-    Util::IJson* convertPathExpression(const IR::PathExpression* expr);
-    Util::IJson* createDefaultTransition();
-    std::vector<Util::IJson*> convertSelectExpression(const IR::SelectExpression* expr);
+    void convertParserStatement(const IR::StatOrDecl* stat);
+    llvm::Type* processLeftExpression(const IR::Expression* e);    
+    void convertParserDecl(const IR::Declaration_Variable* s);
 
  public:
     bool preorder(const IR::P4Parser* p) override;
     bool preorder(const IR::PackageBlock* b) override;
-    explicit ParserConverter(Backend* backend) : backend(backend), refMap(backend->getRefMap()),
-    typeMap(backend->getTypeMap()), json(backend->json),
-    conv(backend->getExpressionConverter()),
-    corelib(P4::P4CoreLibrary::instance) { setName("ParserConverter"); }
+    bool preorder(const IR::AssignmentStatement* t) override;
+    bool preorder(const IR::Declaration_Variable* t) override;
+    bool preorder(const IR::ParserState* parserState) override;
+    bool preorder(const IR::SelectExpression* t) override;
+        
+    
+    explicit ParserConverter(Backend* backend) : backend(backend), toIR(new ToIR(this->backend)), refMap(backend->getRefMap()),
+    typeMap(backend->getTypeMap()), corelib(P4::P4CoreLibrary::instance) {setName("ParserConverter"); }
 };
 
 class ConvertParser final : public PassManager {

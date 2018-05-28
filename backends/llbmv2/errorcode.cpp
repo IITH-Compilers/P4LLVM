@@ -24,6 +24,7 @@ ErrorCodesVisitor::preorder(const IR::Type_Error* errors) {
     for (auto m : *errors->getDeclarations()) {
         BUG_CHECK(map.find(m) == map.end(), "Duplicate error");
         map[m] = map.size();
+        backend->errorsMDV.push_back(MDString::get(backend->TheContext, m->controlPlaneName().c_str()));
     }
     return false;
 }

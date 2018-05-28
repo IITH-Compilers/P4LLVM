@@ -38,6 +38,7 @@ limitations under the License.
 
 #include "llvmIRHeaders.h"
 #include "scopeTable.h"
+// #include "toIR.h"
 
 namespace LLBMV2 {
 
@@ -129,6 +130,7 @@ public:
     raw_fd_ostream *S;
     ScopeTable<Value*> st;
     cstring fileName;
+    // ToIR* toIR;
 
     std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
     std::map<cstring,  std::vector<bool> > action_call_args_isout;
@@ -140,7 +142,7 @@ public:
     llvm::Type* getCorrespondingType(const IR::Type *t);
     llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr, bool required_alloca=false);
     
-    SmallVector<Metadata*, 4> headerMDV, structMDV, huMDV;
+    SmallVector<Metadata*, 4> headerMDV, structMDV, huMDV, errorsMDV;
     
     int i =0; //Debug info
 
@@ -170,7 +172,7 @@ public:
         fileName(fileName) {
             refMap->setIsV1(isV1); 
             setName("BackEnd"); 
-            TheModule = llvm::make_unique<Module>("p4Code", TheContext);
+            TheModule = llvm::make_unique<Module>(fileName.c_str(), TheContext);
             std::vector<Type*> args;
             FunctionType *FT = FunctionType::get(Type::getVoidTy(TheContext), args, false);
             function = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
@@ -202,7 +204,11 @@ public:
 
         MDNode* huMD = MDNode::get(TheContext, huMDV);        
         NamedMDNode *huNMD = TheModule->getOrInsertNamedMetadata("header_union");
-        huNMD->addOperand(huMD);    
+        huNMD->addOperand(huMD);  
+
+        MDNode* errorsMD = MDNode::get(TheContext, errorsMDV);        
+        NamedMDNode *errorsNMD = TheModule->getOrInsertNamedMetadata("errors");
+        errorsNMD->addOperand(errorsMD);   
     }
 };
 

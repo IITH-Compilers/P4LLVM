@@ -40,6 +40,7 @@ set (BMV2_BACKEND_SRCS
   portableSwitch.cpp
   sharedActionSelectorCheck.cpp
   simpleSwitch.cpp
+  toIR.cpp
   )
 
 set (BMV2_BACKEND_HDRS
@@ -66,6 +67,7 @@ set (BMV2_BACKEND_HDRS
   simpleSwitch.h
   scopeTable.h
   llvmIRHeaders.h
+  toIR.h
   )
 
 #set (IR_DEF_FILES ${IR_DEF_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/bmv2.def PARENT_SCOPE)

@@ -54,7 +54,7 @@ set (P4_FRONTEND_SRCS
   p4/directCalls.cpp
   p4/setHeaders.cpp
   p4/deprecated.cpp
-  p4/emitLLVMIR.cpp
+  #p4/emitLLVMIR.cpp
   )
 
 set (P4_FRONTEND_HDRS
@@ -103,7 +103,7 @@ set (P4_FRONTEND_HDRS
   p4/directCalls.h
   p4/setHeaders.h
   p4/deprecated.h
-  p4/emitLLVMIR.h
+  #p4/emitLLVMIR.h
   )
 
 
