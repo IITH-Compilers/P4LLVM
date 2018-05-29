@@ -53,14 +53,14 @@ limitations under the License.
 
 using namespace llvm;
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 #if VERBOSE
 #ifndef MYDEBUG
     #define MYDEBUG(x) x
 #endif
 #else 
-    #define MYDEBUG(x)
+    #define MYDEBUG(x) 
 #endif
 
 #ifndef REPORTBUG
@@ -82,9 +82,9 @@ class ScopeTable{
         dict.at(scope).insert(std::pair<std::string,T>(str,t));
         MYDEBUG(std::cout << "inserted "<<str<<" at scope - "<<scope <<std::endl;);
         typename std::map <std::string, T> map = dict.at(scope);
-        for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
-            MYDEBUG(std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";)
-        }
+        // for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
+        //     MYDEBUG(std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";)
+        // }
     }
     void enterScope()   {
         scope++;
@@ -92,7 +92,7 @@ class ScopeTable{
     }
     void exitScope()    {
         if(scope>0) {
-            it = dict.begin();	       
+            it = dict.begin();         
             dict.erase(it+scope);
             scope--;
         }
@@ -102,7 +102,7 @@ class ScopeTable{
         typename std::map <std::string, T> map = dict.at(scope);
         if(entry != dict.at(scope).end())
         {
-            MYDEBUG(std::cout << entry->first << std::endl; );
+            // MYDEBUG(std::cout << entry->first << std::endl; );
             return entry->second;
         }
         else
@@ -113,13 +113,15 @@ class ScopeTable{
     }
     T lookupGlobal(std::string label)   {
         for(int i=scope; i>=0; i--) {
-            MYDEBUG(std::cout<<"searching for "<<label<<" in scopetable at scope = "<<i<<std::endl;);
+            // MYDEBUG(std::cout<<"searching for "<<label<<" in scopetable at scope = "<<i<<std::endl;);
             auto entry = dict.at(i).find(label);
             if(entry != dict.at(i).end())   {
-                MYDEBUG(std::cout<<"returning value from scope table as -> " << entry->second << std::endl;);
+                // MYDEBUG(std::cout<<"returning value from scope table as -> " << entry->second << std::endl;);
                 return entry->second;
             }
         }
+        MYDEBUG(std::cout<<"Not found in scopetable -> " << label << std::endl;);
+        printAll();
         return 0;
     }
     void printAll() {           
@@ -131,6 +133,14 @@ class ScopeTable{
             }
             
         }
+    }
+    int getCurrentScope() {
+        return scope;
+    }
+    std::map<std::string, T>& getVars(int sc) {
+        std::cout << "sc = " << sc << "scope = " << scope << std::endl; 
+        assert(sc>=0 && sc<=scope);
+        return dict.at(sc);
     }
 };
 
@@ -146,15 +156,22 @@ class EmitLLVMIR : public Inspector {
     raw_fd_ostream *S;
     cstring fileName;
     ScopeTable<Value*> st;
+    std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
+    std::map<cstring,  std::vector<bool> > action_call_args_isout;
+    //IN PROGRESS - used for GEP i.e., from member name get the field index in a struct. all the work related to getelementptr is commented
+    std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
 
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
 
+    std::map<cstring, std::vector<cstring> > action_list_enum;
+
     // Helper Functions 
     unsigned getByteAlignment(unsigned width);
     llvm::Type* getCorrespondingType(const IR::Type *t);
-    llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr);
-
+    llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr, bool required_alloca=false);
+    void createLookUpFunction(StructType *key, StructType *value, StructType *entry, StructType *table);
+    
    public:
     EmitLLVMIR(const IR::P4Program* program, cstring fileName, ReferenceMap* refMap, TypeMap* typeMap) : fileName(fileName), Builder(TheContext), refMap(refMap), typeMap(typeMap) {
         CHECK_NULL(program); 
@@ -165,7 +182,10 @@ class EmitLLVMIR : public Inspector {
         function = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
         
         bbInsert = BasicBlock::Create(TheContext, "entry", function);
+        
+        MYDEBUG(std::cout<< "SetInsertPoint = main\n";)
         Builder.SetInsertPoint(bbInsert);
+        Builder.CreateRetVoid(); // Add this in ConstructorCall Later
         std::ostream& opStream = *openFile(fileName+".ll", true);
         setName("EmitLLVMIR");
     }
@@ -173,8 +193,9 @@ class EmitLLVMIR : public Inspector {
     void dumpLLVMIR() {
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
-        Builder.CreateRetVoid();
+        assert(!TheModule->empty() && "module is empty");
         TheModule->print(*S,nullptr);
+        TheModule->dump();
     }
 
     // Visitor function

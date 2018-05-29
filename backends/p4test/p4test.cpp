@@ -54,6 +54,18 @@ class P4TestOptions : public CompilerOptions {
 
 using P4TestContext = P4CContextWithOptions<P4TestOptions>;
 
+static void log_dump1(const IR::Node *node, const char *head) {
+    if (node) {
+        if (head)
+            std::cout << '+' << std::setw(strlen(head)+6) << std::setfill('-') << "+\n| "
+                      << head << " |\n" << '+' << std::setw(strlen(head)+3) << "+" <<
+                      std::endl << std::setfill(' ');
+        // if (LOGGING(2))
+            dump(node);
+        // else
+            std::cout << *node << std::endl; }
+}
+
 static void log_dump(const IR::Node *node, const char *head) {
     if (node && LOGGING(1)) {
         if (head)
@@ -119,8 +131,9 @@ int main(int argc, char *const argv[]) {
                     std::cerr << bug.what() << std::endl;
                     return 1;
                 }
-                log_dump(program, "After midend");
-                log_dump(top, "Top level block");
+                log_dump1(program, "After midend");
+
+                log_dump1(top, "Top level block");
             }
             if (options.dumpJsonFile)
                 JSONGenerator(*openFile(options.dumpJsonFile, true), true) << program << std::endl;

@@ -38,6 +38,18 @@ limitations under the License.
 
 namespace BMV2 {
 
+static void log_dump1(const IR::Node *node, const char *head) {
+    if (node) {
+        if (head)
+            std::cout << '+' << std::setw(strlen(head)+6) << std::setfill('-') << "+\n| "
+                      << head << " |\n" << '+' << std::setw(strlen(head)+3) << "+" <<
+                      std::endl << std::setfill(' ');
+        // if (LOGGING(2))
+            // dump(node);
+        // else
+            std::cout << *node << std::endl; }
+}
+
 /**
 This class implements a policy suitable for the SynthesizeActions pass.
 The policy is: do not synthesize actions for the controls whose names
@@ -117,7 +129,9 @@ Backend::process(const IR::ToplevelBlock* tlb, BMV2Options& options) {
         evaluator,
         new VisitFunctor([this, evaluator]() { toplevel = evaluator->getToplevelBlock(); }),
     });
-    tlb->getProgram()->apply(*this);
+    const IR::P4Program* prog = tlb->getProgram()->apply(*this);
+    log_dump1(prog,"From backend of bmv2");
+    
 }
 
 /// BMV2 Backend that takes the top level block and converts it to a JsonObject

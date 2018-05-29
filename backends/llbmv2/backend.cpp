@@ -124,7 +124,7 @@ Backend::process(const IR::ToplevelBlock* tlb, BMV2Options& options) {
         new P4::SimplifyControlFlow(refMap, typeMap),
         new P4::RemoveAllUnusedDeclarations(refMap),
         new DiscoverStructure(&structure),
-        new ErrorCodesVisitor(&errorCodesMap),
+        new ErrorCodesVisitor(&errorCodesMap, this),
         new ExtractArchInfo(typeMap),
         evaluator,
         new VisitFunctor([this, evaluator]() { toplevel = evaluator->getToplevelBlock(); }),
@@ -187,12 +187,14 @@ void Backend::convert(BMV2Options& options) {
 
     // This visitor is used in multiple passes to convert expression to json
     conv = new ExpressionConverter(this, scalarsName);
-
+    PassManager programPasses = {
+        new ConvertHeaders(this, scalarsName)
+    };
     // if (psa) tlb->apply(new ConvertExterns());
     PassManager codegen_passes = {
-        new ConvertHeaders(this, scalarsName),
+        // new ConvertHeaders(this, scalarsName),
         // new ConvertExterns(this),  // only run when target == PSA
-        // new ConvertParser(this),
+        new ConvertParser(this),
         // new ConvertActions(this),
         // new ConvertControl(this),
         // new ConvertDeparser(this),
@@ -205,7 +207,8 @@ void Backend::convert(BMV2Options& options) {
         return;
 
     (void)toplevel->apply(ConvertGlobals(this));
-    toplevel->getProgram()->apply(codegen_passes);
+    toplevel->getProgram()->apply(programPasses);
+    main->apply(codegen_passes);
 }
 
 bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
@@ -245,9 +248,7 @@ bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
 
 llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
     assert(t != nullptr && "Type cannot be empty");
-
-    std::cout << *t << " searching for type in getcorrespondingtype" << std::endl;
-
+  
     if(t->is<IR::Type_Void>()) {
         return llvm::Type::getVoidTy(TheContext);
     }
@@ -276,6 +277,12 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
         }
     }
     
+    else if(t->is<IR::Type_Varbits>())  {
+        llvm::Type *temp = Type::getIntNTy(TheContext, t->to<IR::Type_Varbits>()->size);        
+        defined_type[t->toString()] = temp;
+        return temp;
+    }
+
     // Derived Types
     else if (t->is<IR::Type_StructLike>()) {
         assert((t->is<IR::Type_Struct>() || t->is<IR::Type_Header>() || t->is<IR::Type_HeaderUnion>()) && "Unhandled Type_StructLike");
@@ -283,6 +290,7 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
         if(defined_type[t->toString()]) {
             llvm::Type *x = defined_type[t->toString()];
             llvm::StructType *y = dyn_cast<llvm::StructType>(x);
+            
             if(!y->isOpaque()) // if opaque then define it
                 return(x);
         }
@@ -317,7 +325,6 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
 
     else if(t->is<IR::Type_Extern>()) {
         //return metadata
-
         return nullptr;
     }
 

@@ -22,16 +22,18 @@ limitations under the License.
 #include "frontends/p4/typeMap.h"
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "helpers.h"
+#include "backend.h"
 
 namespace LLBMV2 {
 
 class ErrorCodesVisitor : public Inspector {
     ErrorCodesMap*    errorCodesMap;
+    Backend* backend;
  public:
     // we map error codes to numerical values for bmv2
     bool preorder(const IR::Type_Error* errors) override;
-    explicit ErrorCodesVisitor(ErrorCodesMap* errorCodesMap) :
-        errorCodesMap(errorCodesMap)
+    explicit ErrorCodesVisitor(ErrorCodesMap* errorCodesMap, Backend* backend) :
+        errorCodesMap(errorCodesMap), backend(backend)
     { CHECK_NULL(errorCodesMap); setName("ErrorCodeVisitor"); }
 };
 

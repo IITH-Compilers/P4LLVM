@@ -154,7 +154,7 @@ const IR::P4Program *FrontEnd::run(const CompilerOptions &options, const IR::P4P
         new SimplifyControlFlow(&refMap, &typeMap),
         new SpecializeAll(&refMap, &typeMap),
         //
-        new EmitLLVMIR(program, options.file, &refMap, &typeMap),        
+        // new EmitLLVMIR(program, options.file, &refMap, &typeMap),        
         //
         new RemoveParserControlFlow(&refMap, &typeMap),
         new FrontEndLast(),

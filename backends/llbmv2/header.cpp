@@ -209,7 +209,7 @@ bool ConvertHeaders::preorder(const IR::Parameter* param) {
 //  Blocks are not in IR tree, use a custom visitor to traverse
 bool ConvertHeaders::preorder(const IR::PackageBlock *block) {
     for (auto it : block->constantValue) {
-        if (it.second->is<IR::Block>()) {
+        if (it.second->is<IR::Type_StructLike>()) {
             visit(it.second->getNode());
         }
     }
@@ -218,9 +218,9 @@ bool ConvertHeaders::preorder(const IR::PackageBlock *block) {
 
 bool ConvertHeaders::preorder(const IR::Type_StructLike* t) {
     LOG1("\nType_StructLike\t "<<*t << "\ti = "<<backend->i++<<"\n-------------------------------------------------------------------------------------------------------------\n");
-    auto z = backend->defined_type[t->externalName()];
+    auto z = backend->defined_type[t->name];
     if(z)
-        return(backend->defined_type[t->externalName()]);
+        return backend->defined_type[t->name];
    
     std::vector<Type*> members;
     for(auto x: t->fields)
@@ -235,15 +235,14 @@ bool ConvertHeaders::preorder(const IR::Type_StructLike* t) {
     else if(t->is<IR::Type_HeaderUnion>())
         backend->huMDV.push_back(MDString::get(backend->TheContext, "struct."+t->name));
 
-    backend->defined_type[t->externalName()] = structReg;
+    backend->defined_type[t->name] = structReg;
 
     int i=0;
     for(auto x: t->fields) {
         backend->structIndexMap[structReg][std::string(x->name.name)] = i;
         i++;
     }
-    backend->st.insert("alloca_"+t->getName(),backend->Builder.CreateAlloca(structReg));
-    std::cout << "##########################################################33\n";
+    // backend->st.insert("alloca_"+t->getName(),backend->Builder.CreateAlloca(structReg));
     return false;
 }
 
