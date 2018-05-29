@@ -7,7 +7,10 @@
 #include <vector>
 #include "../JsonObjects.h"
 // #include "../helpers.h"
-#include "../../../lib/json.h"
+#include "lib/json.h"
+#include "emitHeader.h"
+#include <fstream>
+#include <iostream>
 
 using namespace llvm;
 
@@ -61,9 +64,9 @@ public:
 			{
 				errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
 				runOnFunction(&*fun);
-        }
-				errs() << "I saw a Module called " << M.getSourceFileName() << "!\n";
-				return false;
+      }
+			printJsonToFile(M.getSourceFileName()+".json");
+			return false;
     }
     bool runOnFunction(Function *F);
     bool emitHeaderTypes(std::vector<StructType *>&, NamedMDNode *);
@@ -79,11 +82,21 @@ private:
 		Util::JsonArray *force_arith;
 		Util::JsonArray *field_aliases;
 		void populateJsonObjects(Module &M);
-		bool emitHeaderTypesHelper(StructType *);
+		LLBMV2::ConvertHeaders ch;
+		void printJsonToFile(const std::string fn);
 };
 }
 
 char JsonBackend::ID = 0;
+
+void JsonBackend::printJsonToFile(const std::string filename) {
+	std::filebuf fb;
+	fb.open(filename, std::ios::out);
+	std::ostream os(&fb);
+	// std::ostream *out = openFile(filename, false);
+	jsonTop.serialize(os);
+	errs() << "printed json to : " << filename << "\n";
+}
 
 Util::JsonArray *mkArrayField(Util::JsonObject *parent, cstring name)
 {
@@ -127,10 +140,6 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
 
-bool JsonBackend::emitHeaderTypesHelper(StructType *st) {
-
-}
-
 bool JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNode *header_md) {
 		assert(header_md->getNumOperands() == 1 && "Header namedMetadata should have only one operand.");
     for(auto st: structs) {
@@ -139,7 +148,8 @@ bool JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNod
 				assert(mdstr != nullptr);
 				if (st->getName().equals(mdstr->getString())) {
 					errs() << st->getName() << " is of Header type\n";
-					emitHeaderTypesHelper(st);
+					ch.addHeaderType(st, json);
+					errs() << "successfully added a header\n";
 				}
 			}
 		}
