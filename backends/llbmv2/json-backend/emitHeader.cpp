@@ -217,8 +217,8 @@ void ConvertHeaders::addHeaderType(const llvm::StructType *st, JsonObjects *json
  * We synthesize a "header_type" for each local which has a struct type
  * and we pack all the scalar-typed locals into a 'scalar' type
  */
-// Visitor::profile_t ConvertHeaders::init_apply(const IR::Node* node) {
-//     scalarsTypeName = refMap->newName("scalars");
+// void ConvertHeaders::processStructs(std::map<llvm::StructType *, std::string>* struct2Type) {
+//     scalarsTypeName = "scalars";
 //     json->add_header_type(scalarsTypeName);
 //     // bit<n>, bool, error are packed into scalars type,
 //     // varbit, struct and stack introduce new header types

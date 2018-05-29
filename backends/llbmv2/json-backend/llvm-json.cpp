@@ -28,12 +28,19 @@ public:
     {
 			// initialize json objects
 			populateJsonObjects(M);
+			populateStruct2Type(M.getIdentifiedStructTypes(),
+													M.getNamedMetadata("header"),
+													M.getNamedMetadata("struct"),
+													M.getNamedMetadata("header_union"));
+			// emitHeaderTypes();
 			auto structs = M.getIdentifiedStructTypes();
 			NamedMDNode *header_md = M.getNamedMetadata("header");
-			NamedMDNode *struct_md = M.getNamedMetadata("struct");
-			NamedMDNode *header_union_md = M.getNamedMetadata("header_union");
+			// NamedMDNode *struct_md = M.getNamedMetadata("struct");
+			// NamedMDNode *header_union_md = M.getNamedMetadata("header_union");
 			if (header_md->getOperand(0)->getNumOperands() != 0)
 				emitHeaderTypes(structs, header_md);
+			// if (struct_md->getOperand(0)->getNumOperands() != 0)
+			// 	emitStructTypes(structs, struct_md);
 			// errs() << "No of struct types are: " << structs.size() << "\n";
 			// if(struct_md != nullptr) {
 			//     errs() << "No of operands in struct : " << struct_md->getNumOperands() << "\n";
@@ -65,11 +72,13 @@ public:
 				errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
 				runOnFunction(&*fun);
       }
-			printJsonToFile(M.getSourceFileName()+".json");
+			printJsonToFile(M.getSourceFileName()+".ll.json");
 			return false;
     }
     bool runOnFunction(Function *F);
-    bool emitHeaderTypes(std::vector<StructType *>&, NamedMDNode *);
+    void emitHeaderTypes(std::vector<StructType *>&, NamedMDNode *);
+		void emitStructTypes(std::vector<StructType *>&, NamedMDNode *);
+
 private:
 		Util::JsonObject jsonTop;
 		LLBMV2::JsonObjects* json;
@@ -82,14 +91,68 @@ private:
 		Util::JsonArray *force_arith;
 		Util::JsonArray *field_aliases;
 		void populateJsonObjects(Module &M);
+		void populateStruct2Type(std::vector<StructType *> structs,
+														NamedMDNode *header_md,
+														NamedMDNode *struct_md,
+														NamedMDNode *header_union_md);
 		LLBMV2::ConvertHeaders ch;
 		void printJsonToFile(const std::string fn);
+		std::map<llvm::StructType*, std::string> struct2Type;
 };
 }
 
 char JsonBackend::ID = 0;
 
-void JsonBackend::printJsonToFile(const std::string filename) {
+void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
+													NamedMDNode *header_md,
+													NamedMDNode *struct_md,
+													NamedMDNode *header_union_md) {
+
+	for (auto st : structs) {
+		bool found = false;
+		for (auto op = 0u; op != header_md->getOperand(0)->getNumOperands(); op++) {
+			MDString *mdstr = dyn_cast<MDString>(header_md->getOperand(0)->getOperand(op));
+			assert(mdstr != nullptr);
+			if (st->getName().equals(mdstr->getString())) {
+				errs() << st->getName() << " is of Header type\n";
+				struct2Type[st] = "header";
+				found = true;
+				break;
+			}
+		}
+		if(found)
+			continue;
+		for (auto op = 0u; op != struct_md->getOperand(0)->getNumOperands(); op++)
+		{
+			MDString *mdstr = dyn_cast<MDString>(struct_md->getOperand(0)->getOperand(op));
+			assert(mdstr != nullptr);
+			if (st->getName().equals(mdstr->getString()))
+			{
+				errs() << st->getName() << " is of struct type\n";
+				struct2Type[st] = "structure";
+				found = true;
+				break;
+			}
+		}
+		if(found)
+			continue;
+		for (auto op = 0u; op != header_union_md->getOperand(0)->getNumOperands(); op++)
+		{
+			MDString *mdstr = dyn_cast<MDString>(header_union_md->getOperand(0)->getOperand(op));
+			assert(mdstr != nullptr);
+			if (st->getName().equals(mdstr->getString()))
+			{
+				errs() << st->getName() << " is of header_unionb type\n";
+				struct2Type[st] = "header_union";
+				found = true;
+				break;
+			}
+		}
+	}
+}
+
+void JsonBackend::printJsonToFile(const std::string filename)
+{
 	std::filebuf fb;
 	fb.open(filename, std::ios::out);
 	std::ostream os(&fb);
@@ -140,7 +203,7 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
 
-bool JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNode *header_md) {
+void JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNode *header_md) {
 		assert(header_md->getNumOperands() == 1 && "Header namedMetadata should have only one operand.");
     for(auto st: structs) {
 			for (auto op = 0; op != header_md->getOperand(0)->getNumOperands(); op++) {
@@ -154,6 +217,21 @@ bool JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNod
 			}
 		}
 }
+
+// void JsonBackend::emitStructTypes(std::vector<StructType *>& structs, NamedMDNode *struct_md) {
+// 	assert(struct_md->getNumOperands() == 1 && "Struct namedMetadata should have only one operand.");
+// 	for (auto st : structs) {
+// 		for (auto op = 0; op != struct_md->getOperand(0)->getNumOperands(); op++) {
+// 			MDString *mdstr = dyn_cast<MDString>(struct_md->getOperand(0)->getOperand(op));
+// 			assert(mdstr != nullptr);
+// 			if (st->getName().equals(mdstr->getString())) {
+// 				errs() << st->getName() << " is of Struct type\n";
+// 				ch.addHeaderType(st, json);
+// 				errs() << "successfully converted Struct type\n";
+// 			}
+// 		}
+// 	}
+// }
 
 bool JsonBackend::runOnFunction(Function *F) {
     return true;
