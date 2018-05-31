@@ -15,196 +15,10 @@ limitations under the License.
 */
 
 #include "parser.h"
-#include "JsonObjects.h"
 
 namespace LLBMV2 {
 
-bool ParserConverter::preorder(const IR::Declaration_Variable* t) {
-    MYDEBUG(std::cout<<"\nDeclaration_Variable\t "<<*t<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-    AllocaInst *alloca = backend->Builder.CreateAlloca(backend->getCorrespondingType(typeMap->getType(t)));
-    backend->st.insert("alloca_"+t->getName(),alloca);       
-    return false;
-}
-
-llvm::Type* ParserConverter::processLeftExpression(const IR::Expression* e)    {
-    llvm::Type* llvmType = nullptr;    
-    llvmValue = toIR->processExpression(e, nullptr, nullptr, true);        
-    llvmType = backend->defined_type[typeMap->getType(e)->toString()];
-    assert(llvmType != nullptr);
-    return llvmType;
-}
-
-bool ParserConverter::preorder(const IR::AssignmentStatement* t) {
-    MYDEBUG(std::cout<<"\nAssignmentStatement\t "<<*t<<"\n-------------------------------------------------------------------------------------------------------------\n";)
-    Type* llvmType = processLeftExpression(t->left);
-    Value* leftValue = llvmValue;
-    std::cout << "process left expression\n";
-    Value* right = toIR->processExpression(t->right);
-    std::cout << "process right expression\n";    
-    right->dump();
-    if(right != nullptr)    {
-        if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
-            right = backend->Builder.CreateZExt(right, llvmType);
-        right->dump();
-        leftValue->dump();
-        backend->Builder.CreateStore(right,leftValue);           
-    }
-    else {
-        BUG("Right part of assignment not found");
-    }
-    llvmValue = nullptr;    
-    return false;
-}
-
-void ParserConverter::convertParserDecl(const IR::Declaration_Variable* s)   {
-    visit(s);
-}
-
-
-void ParserConverter::convertParserStatement(const IR::StatOrDecl* stat) {
-    if (stat->is<IR::AssignmentStatement>()) {
-        auto assign = stat->to<IR::AssignmentStatement>();
-        visit(assign);
-        return;
-    } 
-    else if (stat->is<IR::MethodCallStatement>()) {
-        auto mce = stat->to<IR::MethodCallStatement>()->methodCall;
-        auto minst = P4::MethodInstance::resolve(mce, refMap, typeMap);
-        if (minst->is<P4::ExternMethod>()) {
-            auto extmeth = minst->to<P4::ExternMethod>();
-            if (extmeth->method->name.name == corelib.packetIn.extract.name) {
-                int argCount = mce->arguments->size();
-                if (argCount == 1 || argCount == 2) {
-                    auto arg = mce->arguments->at(0);
-                    auto argtype = typeMap->getType(arg, true);
-                    if (!argtype->is<IR::Type_Header>()) {
-                        ::error("%1%: extract only accepts arguments with header types, not %2%",
-                                arg, argtype);
-                        return;
-                    }
-                    
-                    if (argCount == 1) {
-                        std::cout << "calling processexp from mcs of convert parser stmt: ac=1\n";
-                        llvmValue = toIR->processExpression(arg, nullptr, nullptr, true);        
-                        std::vector<Type*> args;
-                        args.push_back(llvmValue->getType());       
-                        FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
-                        Function *function = Function::Create(FT, Function::ExternalLinkage,  
-                                                    extmeth->method->name.name.c_str(), backend->TheModule.get());
-                        backend->Builder.CreateCall(function, llvmValue);    
-                        llvmValue = nullptr;  
-                        return;                      
-                    }
-                    // if (arg->is<IR::Member>()) {
-                    //     auto mem = arg->to<IR::Member>();
-                    //     auto baseType = typeMap->getType(mem->expr, true);
-                    //     if (baseType->is<IR::Type_Stack>()) {
-                    //         if (mem->member == IR::Type_Stack::next) {
-                    //             type = "stack";
-                    //             j = conv->convert(mem->expr);
-                    //         } else {
-                    //             BUG("%1%: unsupported", mem);
-                    //         }
-                    //     }
-                    // }
-
-                    if (argCount == 2) {
-                        Value *first, *second;       
-                        std::cout << "calling processexp from mcs of convert parser stmt: ac=2:1\n";                                         
-                        llvmValue = toIR->processExpression(arg, nullptr, nullptr, true);        
-                        std::vector<Type*> args;
-                        args.push_back(llvmValue->getType());               
-                        first = llvmValue;
-                        llvmValue = nullptr;
-
-
-                        auto arg2 = mce->arguments->at(1);
-                        std::cout << "calling processexp from mcs of convert parser stmt: ac=2:2\n";                        
-                        llvmValue = toIR->processExpression(arg2, nullptr, nullptr, true);
-                        args.push_back(llvmValue->getType());   
-                        second = llvmValue;            
-                        llvmValue = nullptr;         
-
-                        FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
-                        Function *function = Function::Create(FT, Function::ExternalLinkage,  
-                                                    extmeth->method->name.name.c_str(), backend->TheModule.get());
-                        std::array <Value*, 2> param = {first, second};                        
-                        backend->Builder.CreateCall(function, param);
-                        return;
-                    }                   
-                }
-            }
-            BUG("%1%: Unexpected extern method", extmeth->method->name.name);            
-        } 
-        else if (minst->is<P4::ExternFunction>()) {
-            auto extfn = minst->to<P4::ExternFunction>();
-            if (extfn->method->name.name == IR::ParserState::verify) {
-                std::vector<Type*> args;
-                args.push_back(backend->Builder.getInt8Ty());
-                args.push_back(backend->Builder.getInt32Ty());                
-                FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
-                auto decl = backend->TheModule->getOrInsertFunction(extfn->method->name.name.c_str(), FT);               
-                BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
-                Value *left, *errorVal;
-                {
-                    auto cond = mce->arguments->at(0);
-                    std::cout << "calling processexp from extern fn of convert parser stmt:1\n";                    
-                    llvmValue = toIR->processExpression(cond);
-                    assert(llvmValue != nullptr && "processExpression should not return null");
-                    left = llvmValue;
-                    llvmValue = nullptr;                
-                }
-                {
-                    auto error = mce->arguments->at(1);
-                    std::cout << "calling processexp from extern fn of convert parser stmt:2\n";                                        
-                    llvmValue = toIR->processExpression(error);
-                    assert(llvmValue != nullptr && "processExpression should not return null");                    
-                    errorVal = llvmValue;
-                    llvmValue = nullptr;
-                }
-                std::array <Value*, 2> param = {left, errorVal};
-                backend->Builder.CreateCall(decl, param);
-            }
-            return;
-        } 
-        else if (minst->is<P4::BuiltInMethod>()) {
-            auto bi = minst->to<P4::BuiltInMethod>();
-
-            if (bi->name == IR::Type_Header::setValid || bi->name == IR::Type_Header::setInvalid) {
-                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), backend->Builder.getVoidTy());
-                backend->Builder.CreateCall(decl);
-            } 
-            else if (bi->name == IR::Type_Stack::push_front || bi->name == IR::Type_Stack::pop_front) {
-                std::vector<Type*> args;
-                args.push_back(backend->Builder.getInt32Ty());
-                FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
-                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
-
-                BUG_CHECK(mce->arguments->size() == 1, "Expected 1 argument for %1%", mce);
-                
-                std::cout << "calling processexp from builtin meth of convert parser stmt:1\n";                                    
-                llvmValue = toIR->processExpression(mce->arguments->at(0), nullptr, nullptr, true);
-                assert(llvmValue != nullptr && "processExpression should not return null");
-                backend->Builder.CreateCall(decl, llvmValue);
-                llvmValue = nullptr;
-                
-            } 
-            else {
-                BUG("%1%: Unexpected built-in method", bi->name);
-            }
-            return;
-        }
-    }
-    ::error("%1%: not supported in parser on this target", stat);
-}
-
 bool ParserConverter::preorder(const IR::ParserState* parserState) {
-    if(parserState->name == "start") {
-        // if start state then create branch
-        // from main function to start block
-        backend->Builder.CreateBr(backend->defined_state[parserState->name.name]);
-    }
-
     // set this block as insert point
     backend->Builder.SetInsertPoint(backend->defined_state[parserState->name.name]);
     MYDEBUG(std::cout<< "SetInsertPoint = " << parserState->name.name;)
@@ -219,8 +33,7 @@ bool ParserConverter::preorder(const IR::ParserState* parserState) {
     }
     
     for (auto s : parserState->components) {
-            std::cout << "The current component is -- " << s << "\n";            
-            convertParserStatement(s);
+            s->apply(*toIR);                       
     }
 
     // if  select expression is null
@@ -263,6 +76,8 @@ bool ParserConverter::preorder(const IR::SelectExpression* t) {
 
     SwitchInst *sw = backend->Builder.CreateSwitch(toIR->processExpression(t->select->components[0],NULL,NULL), 
                                                         backend->defined_state["reject"], t->selectCases.size());
+    std::cout<<"coming here1******************\n";
+                                                        
     //comment above line and uncomment below commented code to test selectexpression with dummy select key
     
     // Value* tmp = ConstantInt::get(IntegerType::get(TheContext, 64), 1024, true);
@@ -288,8 +103,8 @@ bool ParserConverter::preorder(const IR::SelectExpression* t) {
                 backend->defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(backend->TheContext, 
                                                      Twine(t->selectCases[i]->state->path->asString()), backend->function);
             }
+            std::cout<<"keyset = "<<*t->selectCases[i]->keyset<<"\ncoming here2******************\n";
             ConstantInt *onVal = (ConstantInt *) toIR->processExpression(t->selectCases[i]->keyset);
-
             sw->addCase(onVal, backend->defined_state[t->selectCases[i]->state->path->asString()]);
         }
     }
@@ -326,8 +141,8 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
     backend->Builder.SetInsertPoint(init_block);
     MYDEBUG(std::cout<< "SetInsertPoint = Parser Entry\n";)
     for (auto s : parser->parserLocals) {
-        if(s->is<IR::Declaration_Variable>())
-            convertParserDecl(s->to<IR::Declaration_Variable>())    ;
+        if(auto dv = s->to<IR::Declaration_Variable>())
+            dv->apply(*toIR);            
     }
     for (auto p : pl->parameters) {
         if(p->type->toString() == "packet_in")
@@ -336,7 +151,6 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
         args->setName(std::string(p->name.name));
         AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
         backend->st.insert("alloca_"+std::string(p->name.name),alloca);
-        // Builder.CreateStore(args, alloca);
         args++;
     }
     std::cout << "here3\n";
@@ -344,6 +158,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
         llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(backend->TheContext, std::string(s->name.name), parser_function);
         backend->defined_state[s->name.name] = bbInsert;
     }
+    backend->Builder.CreateBr(backend->defined_state["start"]);
     for (auto s : parser->states) {
         MYDEBUG(std::cout << "Visiting State = " <<  s << std::endl;);
         visit(s);

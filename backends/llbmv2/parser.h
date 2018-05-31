@@ -37,16 +37,9 @@ class ParserConverter : public Inspector {
     P4::P4CoreLibrary&   corelib;
     Value* llvmValue;    
 
- protected:
-    void convertParserStatement(const IR::StatOrDecl* stat);
-    llvm::Type* processLeftExpression(const IR::Expression* e);    
-    void convertParserDecl(const IR::Declaration_Variable* s);
-
  public:
     bool preorder(const IR::P4Parser* p) override;
     bool preorder(const IR::PackageBlock* b) override;
-    bool preorder(const IR::AssignmentStatement* t) override;
-    bool preorder(const IR::Declaration_Variable* t) override;
     bool preorder(const IR::ParserState* parserState) override;
     bool preorder(const IR::SelectExpression* t) override;
         

@@ -108,6 +108,7 @@ class Backend : public PassManager {
     { jsonTop.serialize(out); }
     P4::P4CoreLibrary &   getCoreLibrary() const   { return corelib; }
     ErrorCodesMap &       getErrorCodesMap()       { return errorCodesMap; }
+    // P4::ConvertEnums::EnumMapping* getEnumMap() {return enumMap;}
     ExpressionConverter * getExpressionConverter() { return conv; }
     DirectCounterMap &    getDirectCounterMap()    { return directCounterMap; }
     DirectMeterMap &      getMeterMap()  { return meterMap; }
@@ -130,10 +131,10 @@ public:
     raw_fd_ostream *S;
     ScopeTable<Value*> st;
     cstring fileName;
+    std::map<cstring, std::vector<cstring> > enums;
+    
     // ToIR* toIR;
 
-    std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
-    std::map<cstring,  std::vector<bool> > action_call_args_isout;
     std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
@@ -209,6 +210,27 @@ public:
         MDNode* errorsMD = MDNode::get(TheContext, errorsMDV);        
         NamedMDNode *errorsNMD = TheModule->getOrInsertNamedMetadata("errors");
         errorsNMD->addOperand(errorsMD);   
+
+        for(auto e : enums) {
+            SmallVector<Metadata*, 8> enumMDV;
+            for(auto inner : e.second)  {
+                std::cout << "pushing -- " << inner <<"\n";
+                enumMDV.push_back(MDString::get(TheContext, inner.c_str()));
+            }
+            MDNode* enumsMD = MDNode::get(TheContext, enumMDV);        
+            NamedMDNode *enumsNMD = TheModule->getOrInsertNamedMetadata(e.first.c_str());
+            enumsNMD->addOperand(enumsMD);
+        }
+    }
+
+    Type* getType(const IR::Type *t) {
+        assert(t != nullptr && "Type cannot be empty");    
+        Type* type = getCorrespondingType(t);
+        if(type->isArrayTy()) {
+            auto width = type->getArrayNumElements();
+            return Type::getIntNTy(TheContext, width);
+        }
+        return type;
     }
 };
 

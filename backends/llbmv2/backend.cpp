@@ -167,12 +167,16 @@ void Backend::convert(BMV2Options& options) {
     json->add_meta_info();
 
     // convert all enums to json
+    std::cout << "enums follow:\n";
     for (const auto &pEnum : *enumMap) {
         auto name = pEnum.first->getName();
+        std::cout<< "enum -- "<<name<<" \n";
         for (const auto &pEntry : *pEnum.second) {
             json->add_enum(name, pEntry.first, pEntry.second);
+            std::cout << pEntry.first << "---" << pEntry.second << "\n";
         }
     }
+    std::cout << "----------------enums end-------------------\n";
     if (::errorCount() > 0)
         return;
 
@@ -196,8 +200,8 @@ void Backend::convert(BMV2Options& options) {
         // new ConvertExterns(this),  // only run when target == PSA
         new ConvertParser(this),
         // new ConvertActions(this),
-        // new ConvertControl(this),
-        // new ConvertDeparser(this),
+        new ConvertControl(this),
+        new ConvertDeparser(this),
     };
 
     codegen_passes.setName("CodeGen");
@@ -248,13 +252,13 @@ bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
 
 llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
     assert(t != nullptr && "Type cannot be empty");
-  
+    std::cout << "in gct -- " << t->toString() <<"\n";
     if(t->is<IR::Type_Void>()) {
         return llvm::Type::getVoidTy(TheContext);
     }
     
     else if(t->is<IR::Type_Boolean>()) {
-        llvm::Type *temp = Type::getInt8Ty(TheContext);                         
+        llvm::Type *temp = Type::getInt1Ty(TheContext);                         
         defined_type[t->toString()] = temp;
         return temp;
     }
@@ -263,32 +267,44 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
     else if(t->is<IR::Type_Bits>()) { // Bot int <> and bit<> passes this check
         const IR::Type_Bits *x =  dynamic_cast<const IR::Type_Bits *>(t);
         int width = x->width_bits();
-        // To do this --> How to implement unsigned and signed int in llvm
-        // Right now they both are same
-        if(x->isSigned) {   
-            llvm::Type *temp = Type::getIntNTy(TheContext, width);                
+        if(x->isSigned) //Int 
+        {   
+            llvm::Type *temp = Type::getIntNTy(TheContext, width);
             defined_type[t->toString()] = temp;
             return temp;
         }
-        else {   
-            llvm::Type *temp = Type::getIntNTy(TheContext, width);
+        else //Bit
+        {   
+            llvm::Type *temp = ArrayType::get(Type::getInt1Ty(TheContext), width);                
             defined_type[t->toString()] = temp;
             return temp;
         }
     }
     
     else if(t->is<IR::Type_Varbits>())  {
-        llvm::Type *temp = Type::getIntNTy(TheContext, t->to<IR::Type_Varbits>()->size);        
+        llvm::Type *temp = ArrayType::get(Type::getInt1Ty(TheContext), t->to<IR::Type_Varbits>()->size);       
         defined_type[t->toString()] = temp;
         return temp;
     }
 
     // Derived Types
+    else if(t->is<IR::Type_Name>()) {
+        std::cout << "in type name"<<*t<<"\n";
+        if(defined_type[t->toString()]) {
+            std::cout << "returning from presence\n";
+            return(defined_type[t->toString()]);
+        }
+        std::cout << "element not present\n";
+        auto canon = typeMap->getTypeType(t, true);
+        defined_type[t->toString()] = getCorrespondingType(canon);
+        return defined_type[t->toString()];
+    }
+    
     else if (t->is<IR::Type_StructLike>()) {
         assert((t->is<IR::Type_Struct>() || t->is<IR::Type_Header>() || t->is<IR::Type_HeaderUnion>()) && "Unhandled Type_StructLike");
-
-        if(defined_type[t->toString()]) {
+        if(defined_type[t->toString()]) { 
             llvm::Type *x = defined_type[t->toString()];
+            x->dump();
             llvm::StructType *y = dyn_cast<llvm::StructType>(x);
             
             if(!y->isOpaque()) // if opaque then define it
@@ -314,13 +330,18 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
         return(getCorrespondingType(x->type)); 
     }
 
-    else if(t->is<IR::Type_Name>()) {
-        if(defined_type[t->toString()]) {
-            return(defined_type[t->toString()]);
+    else if(auto ty = t->to<IR::Type_Stack>()){
+        if(auto st = ty->elementType->to<IR::Type_StructLike>()){
+            if(defined_type[st->name]) {
+                return ArrayType::get(defined_type[st->name], ty->getSize());
+            } 
         }
-        auto canon = typeMap->getTypeType(t, true);
-        defined_type[t->toString()] = getCorrespondingType(canon);
-        return defined_type[t->toString()];
+        // llvm::Type *temp = ArrayType::get(getCorrespondingType(ty->elementType), ty->getSize());    
+        // temp->dump();   
+        // defined_type[t->toString()] = temp;
+        // return temp;
+        llvm_unreachable("stack should have been handled as structlike");
+        return nullptr;
     }
 
     else if(t->is<IR::Type_Extern>()) {

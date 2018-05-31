@@ -29,11 +29,13 @@ limitations under the License.
 #include "helpers.h"
 #include "sharedActionSelectorCheck.h"
 #include "simpleSwitch.h"
+#include "toIR.h"
 
 namespace LLBMV2 {
 
 class ControlConverter : public Inspector {
     Backend*               backend;
+    ToIR* toIR;    
     P4::ReferenceMap*      refMap;
     P4::TypeMap*           typeMap;
     ExpressionConverter*   conv;
@@ -57,11 +59,12 @@ class ControlConverter : public Inspector {
  public:
     bool preorder(const IR::PackageBlock* b) override;
     bool preorder(const IR::ControlBlock* b) override;
+    bool preorder(const IR::P4Action* a) override;
 
-    explicit ControlConverter(Backend *backend) : backend(backend),
+    explicit ControlConverter(Backend *backend) : backend(backend), toIR(new ToIR(this->backend)),
         refMap(backend->getRefMap()), typeMap(backend->getTypeMap()),
         conv(backend->getExpressionConverter()), json(backend->json)
-    { setName("Control"); }
+    { std::cout << "8888888888888888888888888888888888888888\n";setName("Control"); }
 };
 
 class ChecksumConverter : public Inspector {

@@ -333,7 +333,14 @@ ParserConverter::createDefaultTransition() {
 bool ParserConverter::preorder(const IR::P4Parser* parser) {
     // hanw hard-coded parser name assumed by BMv2
     auto parser_id = json->add_parser("parser");
+    std::cout << "----------------------------------------------------------------\n";
+    std::cout << *parser->getApplyParameters();
+    std::cout << "\n----------------------------------------------------------------\n";
 
+    std::cout << "----------------------------------------------------------------\n";
+    std::cout << parser->getDeclarations()->count();
+    std::cout << "\n----------------------------------------------------------------\n";
+   
     for (auto s : parser->parserLocals) {
         if (s->is<IR::Declaration_Instance>()) {
             ::error("%1%: not supported on parsers on this target", s);
