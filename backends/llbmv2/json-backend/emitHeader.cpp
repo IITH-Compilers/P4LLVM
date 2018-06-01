@@ -65,7 +65,7 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
     for (auto f : type->elements()) {
         if (f->isStructTy()) {
             auto ft = dyn_cast<StructType>(f);
-            auto header_name = ft->getName().str() + ".field_" +
+            auto header_name = type->getName().str() + ".field_" +
                                 std::to_string(fieldCount++);
             auto header_type = ft->getName().str();
             if (meta == true) {
@@ -79,10 +79,10 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                     // headers in the union.  Each instance will be named with
                     // a prefix including the union name, e.g., "u.h"
                     Util::JsonArray* fields = new Util::JsonArray();
+                    unsigned unionFieldCount = 0;
                     for (auto uf : ft->elements()) {
-                        unsigned fieldCount = 0;
                         auto h_name = header_name + "." + ft->getName().str()
-                                        + ".field_" + std::to_string(fieldCount++);
+                                        + ".field_" + std::to_string(unionFieldCount++);
                         auto h_type = dyn_cast<StructType>(uf)->getName().str();
                         unsigned id = json->add_header(h_type, h_name);
                         fields->append(id);
@@ -210,7 +210,7 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
             addHeaderType(ht, struct2Type, json);
             auto field = pushNewArray(fields);
             // field->append(f->getName());
-            field->append(ht->getName().str() + ".field_"
+            field->append(st->getName().str() + ".field_"
                             + std::to_string(fieldCount++));
             field->append(ht->getName());
         }
@@ -289,14 +289,14 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
     // bit<n>, bool, error are packed into scalars type,
     // varbit, struct and stack introduce new header types
     // for (auto v : backend->getStructure().variables) {
+    unsigned allocaCount = 0;
     for(auto v : *allocaList) {
-        unsigned allocaCount = 0;
         Type* type = v->getAllocatedType();
         if (type->isStructTy()) {
             llvm::StructType* st = dyn_cast<llvm::StructType>(type);
             // assert(st != nullptr && "Alloca is not of Struct type");
             // auto metadata_type = st->controlPlaneName();
-            auto metadata_type = "dnont_know";
+            auto metadata_type = "dont_know";
             if ((*struct2Type)[st] == "header")
                 json->add_header(metadata_type, st->getName().str() + "_"+ std::to_string(allocaCount++));
             else
@@ -354,7 +354,8 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
     }
 
     // always-have metadata instance
-    json->add_metadata(scalarsTypeName, scalarsName);
+    // json->add_metadata(scalarsTypeName, scalarsName);
+    json->add_metadata(scalarsTypeName, "scalars");
     json->add_metadata("standard_metadata_t", "standard_metadata");
     // return Inspector::init_apply(node);
 }
