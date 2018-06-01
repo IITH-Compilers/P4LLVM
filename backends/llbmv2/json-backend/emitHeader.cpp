@@ -110,8 +110,8 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                 addHeaderField(json, scalarsTypeName, newName, bitWidth, true);
                 scalars_width += bitWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
-            } else if (f->isArrayTy() && f->getArrayElementType()->isIntegerTy(1)) {
-                unsigned bitWidth = f->getArrayNumElements();
+            } else if (f->isVectorTy() && f->getVectorElementType()->isIntegerTy(1)) {
+                unsigned bitWidth = f->getVectorNumElements();
                 addHeaderField(json, scalarsTypeName, newName, bitWidth, false);
                 scalars_width += bitWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
@@ -238,13 +238,14 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
             field->append(f->getIntegerBitWidth());
             field->append(true);
             max_length += f->getIntegerBitWidth();
-        } else if (f->isArrayTy() && f->getArrayElementType()->isIntegerTy(1)) { // bits<> Type : is considerd as Array of 1 bits
+        // } else if (f->isArrayTy() && f->getArrayElementType()->isIntegerTy(1)) { // bits<> Type : is considerd as Array of 1 bits
+        } else if (f->isVectorTy() && f->getVectorElementType()->isIntegerTy(1)) { // bits<> Type : is considerd as Array of 1 bits
             auto field = pushNewArray(fields);
             field->append(st->getName().str()
                             + ".field_" + std::to_string(fieldCount++));
-            field->append(f->getArrayNumElements());
+            field->append(f->getVectorNumElements());
             field->append(false);
-            max_length += f->getArrayNumElements();
+            max_length += f->getVectorNumElements();
         } else if (f->isArrayTy() && f->getArrayElementType()->isStructTy()) {
             errs() << st->getName() << "nested stack : abnormal exit\n";
             exit(1);
@@ -335,7 +336,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
         //         continue;  // already seen
         //     visitedHeaders.emplace(headerName);
         //     addHeaderType(hdrType);
-        } else if (type->isArrayTy() && type->getArrayElementType()->isIntegerTy(1)) {
+        } else if (type->isVectorTy() && type->getVectorElementType()->isIntegerTy(1)) {
             // The above is the condition of checking `bits` type
             unsigned nBits = type->getArrayNumElements();
             addHeaderField(json, scalarsTypeName, ("alloca_" + std::to_string(allocaCount++)), nBits, false);

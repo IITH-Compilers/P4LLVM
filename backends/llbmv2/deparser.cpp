@@ -19,12 +19,10 @@ limitations under the License.
 
 namespace LLBMV2 {
 
-void ConvertDeparser::convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body,
-                                          Util::JsonArray* result) {
-    conv->simpleExpressionsOnly = true;
+void ConvertDeparser::convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body) {
     for (auto s : *body) {
         if (auto block = s->to<IR::BlockStatement>()) {
-            convertDeparserBody(&block->components, result);
+            convertDeparserBody(&block->components);
             continue;
         } else if (s->is<IR::ReturnStatement>() || s->is<IR::ExitStatement>()) {
             break;
@@ -40,29 +38,7 @@ void ConvertDeparser::convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body
                     if (em->method->name.name == backend->getCoreLibrary().packetOut.emit.name) {
                         BUG_CHECK(mc->arguments->size() == 1,
                                   "Expected exactly 1 argument for %1%", mc);
-                        auto arg = mc->arguments->at(0);
-                        auto type = typeMap->getType(arg, true);
-                        if (type->is<IR::Type_Stack>()) {
-                            // This branch is in fact never taken, because
-                            // arrays are expanded into elements.
-                            int size = type->to<IR::Type_Stack>()->getSize();
-                            for (int i=0; i < size; i++) {
-                                auto j = conv->convert(arg);
-                                auto e = j->to<Util::JsonObject>()->get("value");
-                                BUG_CHECK(e->is<Util::JsonValue>(),
-                                          "%1%: Expected a Json value", e->toString());
-                                cstring ref = e->to<Util::JsonValue>()->getString();
-                                ref += "[" + Util::toString(i) + "]";
-                                result->append(ref);
-                            }
-                        } else if (type->is<IR::Type_Header>()) {
-                            auto j = conv->convert(arg);
-                            auto val = j->to<Util::JsonObject>()->get("value");
-                            result->append(val);
-                        } else {
-                            ::error("%1%: emit only supports header and stack arguments, not %2%",
-                                    arg, type);
-                        }
+                        toIR->createExternFunction(1, mc, em->method->name.name);
                     }
                     continue;
                 }
@@ -70,17 +46,30 @@ void ConvertDeparser::convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body
         }
         ::error("%1%: not supported with a deparser on this target", s);
     }
-    conv->simpleExpressionsOnly = false;
 }
 
-Util::IJson* ConvertDeparser::convertDeparser(const IR::P4Control* ctrl) {
-    auto result = new Util::JsonObject();
-    result->emplace("name", "deparser");  // at least in simple_router this name is hardwired
-    result->emplace("id", nextId("deparser"));
-    result->emplace_non_null("source_info", ctrl->sourceInfoJsonObj());
-    auto order = mkArrayField(result, "order");
-    convertDeparserBody(&ctrl->body->components, order);
-    return result;
+void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
+    backend->st.enterScope();
+    auto pl = cont->type->getApplyParameters();
+    std::vector<Type*> control_function_args; 
+    for (auto p : pl->parameters)
+        control_function_args.push_back(backend->getCorrespondingType(p->type)); // push type of parameter
+    
+    FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
+    Function *control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(cont->getName().toString()), backend->TheModule.get());
+    backend->function = control_function;
+    Function::arg_iterator args = control_function->arg_begin();
+
+    BasicBlock *init_block = BasicBlock::Create(backend->TheContext, "entry", control_function);
+    backend->Builder.SetInsertPoint(init_block);
+    for (auto p : pl->parameters){
+        args->setName(std::string(p->name.name));
+        AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+        backend->st.insert("alloca_"+std::string(p->name.name),alloca);
+        backend->Builder.CreateStore(args, alloca);        
+        args++;
+    }
+    convertDeparserBody(&cont->body->components);
 }
 
 bool ConvertDeparser::preorder(const IR::PackageBlock* block) {
@@ -98,8 +87,7 @@ bool ConvertDeparser::preorder(const IR::ControlBlock* block) {
         return false;
     }
     const IR::P4Control* cont = block->container;
-    auto deparserJson = convertDeparser(cont);
-    json->deparsers->append(deparserJson);
+    convertDeparser(cont);
     return false;
 }
 

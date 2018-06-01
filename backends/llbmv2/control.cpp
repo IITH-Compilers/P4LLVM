@@ -645,6 +645,75 @@ Util::IJson* ControlConverter::convertIf(const CFG::IfNode* node, cstring prefix
     return result;
 }
 
+bool ControlConverter::preorder(const IR::P4Action* t){
+    MYDEBUG(std::cout << "Action Name = " << t->name.name << "\n";);
+    //TODO handling Annotations
+    Function *old_func = backend->function;
+    BasicBlock *old_bb = backend->Builder.GetInsertBlock();
+
+    std::vector<Type*> args;
+    std::vector<std::string> names;
+    std::set<std::string> allnames;
+    std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
+
+    for (auto param : *(t->parameters)->getEnumerator()) {
+        //add this parameter type to args
+        args.push_back(backend->getType(param->type));
+        names.push_back("alloca_"+std::string(param->name.name));
+        allnames.insert(std::string(param->name.name));
+        MYDEBUG(std::cout << param->name.name << "\n";)
+    }
+    
+
+    int actual_argsize = args.size();
+    action_call_args[t->name.name] = std::vector<llvm::Value *>(0);
+    //add more parameters from outer scopes
+    // for (int i = st.getCurrentScope(); i>=st.getCurrentScope()-1 && i>=0 ; i--) {
+    auto &vars = backend->st.getVars(backend->st.getCurrentScope());
+    for (auto vp : vars) {
+        if (allnames.find(std::string(vp.first)) == allnames.end()) {
+            args.push_back(((PointerType*)vp.second->getType())->getElementType());
+            action_call_args[t->name.name].push_back(vp.second);
+            names.push_back(std::string(vp.first));
+            allnames.insert(std::string(vp.first));
+            // MYDEBUG(vp.second->dump();)
+        }
+    }
+    backend->st.enterScope();
+
+    FunctionType *FT = FunctionType::get(Type::getVoidTy(backend->TheContext), args, false);
+    
+    backend->function = Function::Create(FT, Function::ExternalLinkage, Twine(t->name.name), backend->TheModule.get());
+    backend->bbInsert = BasicBlock::Create(backend->TheContext, "entry", backend->function);
+    MYDEBUG(std::cout<< "SetInsertPoint = " << t->name.name << " - Entry\n";)
+
+    backend->Builder.SetInsertPoint(backend->bbInsert);
+
+    auto names_iter = names.begin();
+    std::cout << __LINE__ << "\n\n";
+    for (auto arg = backend->function->arg_begin(); arg != backend->function->arg_end(); arg++)
+    {
+        //name the argument
+        arg->setName(Twine(*names_iter));
+        AllocaInst *alloca = backend->Builder.CreateAlloca(arg->getType());
+        backend->st.insert(std::string(*names_iter),alloca);
+        backend->Builder.CreateStore(arg, alloca);
+        // arg->dump();
+        names_iter++;
+    }
+
+    t->body->apply(*toIR);
+
+    backend->st.exitScope();
+    backend->function = old_func;   
+    backend->bbInsert = old_bb; 
+    backend->Builder.CreateRetVoid();
+
+    MYDEBUG(std::cout<< "SetInsertPoint = " << std::string(backend->bbInsert->getName());)
+    backend->Builder.SetInsertPoint(backend->bbInsert);
+    return false;
+}
+
 /**
     Custom visitor to enable traversal on other blocks
 */
@@ -707,11 +776,57 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
             conditionals->append(j);
         }
     }
+    backend->st.enterScope();
+    auto pl = cont->type->getApplyParameters();
+    std::vector<Type*> control_function_args; 
+    for (auto p : pl->parameters)
+        control_function_args.push_back(backend->getType(p->type)); // push type of parameter
+    
+    FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
+    Function *control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(cont->getName().toString()), backend->TheModule.get());
+    backend->function = control_function;
+    Function::arg_iterator args = control_function->arg_begin();
 
+    BasicBlock *init_block = BasicBlock::Create(backend->TheContext, "entry", control_function);
+    backend->Builder.SetInsertPoint(init_block);
+    for (auto p : pl->parameters){
+        args->setName(std::string(p->name.name));
+        AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+        backend->st.insert("alloca_"+std::string(p->name.name),alloca);
+        backend->Builder.CreateStore(args, alloca);        
+        args++;
+    }
+    // visit(t->annotations);
+    // visit(t->getTypeParameters());    // visits TypeParameters
+    // MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";)
+    // for (auto p : cont->getApplyParameters()->parameters) {
+    //     auto type = typeMap->getType(p);
+    //     bool initialized = (p->direction == IR::Direction::In || p->direction == IR::Direction::InOut);
+    //     // auto value = factory->create(type, !initialized); // Create type declaration
+    // }  
+    // MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";);
+    
+    // if (cont->constructorParams->size() != 0) 
+    //     visit(t->constructorParams); //visits Vector -> ParameterList
+    // visit(&t->controlLocals); // visits Vector -> Declaration 
+    // //Declare basis block for each state
+    // MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";);
+    // visit(t->body);
+    // st.exitScope();
+    // MYDEBUG(std::cout << "FLAG\t" << __LINE__<< "\n";);
+    // Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
+    // return true;
     // hanw: skip for PSA
     for (auto c : cont->controlLocals) {
+        if(auto s = c->to<IR::Declaration_Variable>())  {
+            s->apply(*toIR);    
+            continue;
+        }
+        if(auto s = c->to<IR::P4Action>()) {
+            visit(s);
+            continue;
+        }
         if (c->is<IR::Declaration_Constant>() ||
-            c->is<IR::Declaration_Variable>() ||
             c->is<IR::P4Action>() ||
             c->is<IR::P4Table>())
             continue;
@@ -731,7 +846,7 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
         }
         P4C_UNIMPLEMENTED("%1%: not yet handled", c);
     }
-
+    backend->Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(backend->TheContext), 1));  
     json->pipelines->append(result);
     return false;
 }

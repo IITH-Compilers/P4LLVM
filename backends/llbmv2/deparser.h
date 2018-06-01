@@ -18,11 +18,10 @@ limitations under the License.
 #define _BACKENDS_BMV2_DEPARSER_H_
 
 #include "ir/ir.h"
-#include "lib/json.h"
 #include "frontends/p4/typeMap.h"
 #include "frontends/common/resolveReferences/referenceMap.h"
-#include "expression.h"
 #include "backend.h"
+#include "toIR.h"
 
 namespace LLBMV2 {
 
@@ -30,12 +29,11 @@ class ConvertDeparser : public Inspector {
     Backend*               backend;
     P4::ReferenceMap*      refMap;
     P4::TypeMap*           typeMap;
-    LLBMV2::JsonObjects*     json;
-    ExpressionConverter*   conv;
+    ToIR* toIR;
 
  protected:
-    Util::IJson* convertDeparser(const IR::P4Control* ctrl);
-    void convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body, Util::JsonArray* result);
+    void convertDeparser(const IR::P4Control* ctrl);
+    void convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body);
  public:
     bool preorder(const IR::PackageBlock* block);
     bool preorder(const IR::ControlBlock* ctrl);
@@ -43,8 +41,7 @@ class ConvertDeparser : public Inspector {
     explicit ConvertDeparser(Backend* backend) :
         backend(backend), refMap(backend->getRefMap()),
         typeMap(backend->getTypeMap()),
-        json(backend->json),
-        conv(backend->getExpressionConverter()){ setName("ConvertDeparser"); }
+        toIR(new ToIR(this->backend)){ setName("ConvertDeparser"); }
 };
 
 }  // namespace LLBMV2

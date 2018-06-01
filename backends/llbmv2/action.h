@@ -20,6 +20,7 @@ limitations under the License.
 #include "ir/ir.h"
 #include "backend.h"
 #include "simpleSwitch.h"
+#include "toIR.h"
 
 namespace LLBMV2 {
 
@@ -29,7 +30,8 @@ class ConvertActions : public Inspector {
     P4::TypeMap*           typeMap;
     LLBMV2::JsonObjects*     json;
     ExpressionConverter*   conv;
-
+    ToIR* toIR;
+ 
     void convertActionBody(const IR::Vector<IR::StatOrDecl>* body,
                            Util::JsonArray* result);
     void convertActionParams(const IR::ParameterList *parameters,
@@ -39,7 +41,7 @@ class ConvertActions : public Inspector {
  public:
     explicit ConvertActions(Backend *backend) : backend(backend),
     refMap(backend->getRefMap()), typeMap(backend->getTypeMap()),
-    json(backend->json), conv(backend->getExpressionConverter())
+    json(backend->json), conv(backend->getExpressionConverter()), toIR(new ToIR(this->backend))
     { setName("ConvertActions"); }
 };
 
