@@ -26,7 +26,7 @@ void ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cst
     }
 
     FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
-    auto decl = backend->TheModule->getOrInsertFunction(name.c_str(), FT);  
+    Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
     backend->Builder.CreateCall(decl, param);
 }
 
@@ -48,7 +48,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             return backend->Builder.CreateICmpEQ(exp, ConstantInt::get(exp->getType(),0));
 
         if(auto c = e->to<IR::Cast>())  {
-            std::cout << "in cast\n";
+            std::cout << "in cast\n"<<"oue->expr -- " <<*oue->expr<<"\ncast type--"<<*c<<"\n";
             int srcWidth = oue->expr->type->width_bits();
             int destWidth = c->destType->width_bits();
             if(srcWidth < destWidth)   {
@@ -112,18 +112,14 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             ex = backend->Builder.CreateGEP(ex, idx);
             MYDEBUG(std::cout << "created GEP\n";)
             std::cout << "*****************************************************************************\n";
-            if(ex->getType()->getPointerElementType()->isArrayTy()) {
+            if(ex->getType()->getPointerElementType()->isVectorTy()) {
                 std::cout << "inside arrayty\n";
                 ex->dump();
                 ex->getType()->getPointerElementType()->dump();
-                auto width = ex->getType()->getPointerElementType()->getArrayNumElements();
+                auto width = dyn_cast<SequentialType>(ex->getType()->getPointerElementType())->getNumElements();
                 std::cout << "width =-- "<<width<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!111111111\n";
-                // cast<PointerType>(Type::getIntNTy(backend->TheContext, width))->dump();
-                // PointerType::get(Type::getIntNTy(backend->TheContext, width),32)->dump();
-                // std::cout << Type::getIntNTy(backend->TheContext, width)->getPointerAddressSpace() << "\n";
                 auto x = Type::getIntNPtrTy(backend->TheContext, width);
                 auto tmp = backend->Builder.CreateBitCast(ex, x);
-                std::cout <<"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
                 tmp->dump();
                 ex = tmp;
             }
@@ -182,6 +178,32 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             right = processExpression(obe->right, bbIf, bbElse);
         }
 
+        int leftWidth = obe->left->type->width_bits();
+        int rightWidth = obe->right->type->width_bits();
+        if(leftWidth < rightWidth) //extend left to fit right
+        {       
+            if(auto type = obe->right->type->to<IR::Type_Bits>())    {
+                if(type->isSigned)
+                    left = backend->Builder.CreateSExt(left,backend->getType(obe->right->type));
+                else
+                    left = backend->Builder.CreateZExt(left,backend->getType(obe->right->type));                        
+            }
+            else
+                left = backend->Builder.CreateZExtOrBitCast (left,backend->getType(obe->right->type));
+        }
+        else if (leftWidth > rightWidth) //extend right to fit left
+        {   
+            if(auto type = obe->right->type->to<IR::Type_Bits>())    {
+                if(type->isSigned)
+                    right = backend->Builder.CreateSExt(right,backend->getType(obe->left->type));
+                else
+                    right = backend->Builder.CreateZExt(right,backend->getType(obe->left->type));                        
+            }
+            else
+                right = backend->Builder.CreateZExtOrBitCast (right,backend->getType(obe->left->type));
+        }
+
+        std::cout<<"left-->"<<*obe->left<<"\n";left->dump();std::cout<<"right-->"<<*obe->right<<"\n";right->dump();
         if(e->is<IR::Add>())    
             return backend->Builder.CreateAdd(left,right);   
 
@@ -376,10 +398,20 @@ bool ToIR::preorder(const IR::Declaration_Variable* t) {
 
 bool ToIR::preorder(const IR::AssignmentStatement* t) {
     Value* leftValue = processExpression(t->left, nullptr, nullptr, true);
+    assert(leftValue != nullptr && "left expression in assignment can't be null");
     Type* llvmType = leftValue->getType();          
     Value* right = processExpression(t->right);
     if(right != nullptr)    {
-        if(((PointerType*)llvmType)->getElementType ()->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
+        std::cout << "in assignment stmt -- right\nleft val -- ";
+        leftValue->dump();
+        std::cout<<"right val--\n";
+        right->dump();
+        if(((PointerType*)llvmType)->getElementType()->isVectorTy())    {
+            std::cout << "im vector type\n";
+            ((PointerType*)llvmType)->getElementType()->dump();
+            right = backend->Builder.CreateBitCast(right, ((PointerType*)llvmType)->getElementType());
+        }
+        else if(((PointerType*)llvmType)->getElementType ()->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
             right = backend->Builder.CreateZExt(right, llvmType);
         backend->Builder.CreateStore(right,leftValue);           
     }

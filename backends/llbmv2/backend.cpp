@@ -275,21 +275,21 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
         }
         else //Bit
         {   
-            llvm::Type *temp = ArrayType::get(Type::getInt1Ty(TheContext), width);                
+            llvm::Type *temp =  VectorType::get(Type::getInt1Ty(TheContext), width);                
             defined_type[t->toString()] = temp;
             return temp;
         }
     }
     
     else if(t->is<IR::Type_Varbits>())  {
-        llvm::Type *temp = ArrayType::get(Type::getInt1Ty(TheContext), t->to<IR::Type_Varbits>()->size);       
+        llvm::Type *temp = VectorType::get(Type::getInt1Ty(TheContext), t->to<IR::Type_Varbits>()->size);       
         defined_type[t->toString()] = temp;
         return temp;
     }
 
     // Derived Types
     else if(t->is<IR::Type_Name>()) {
-        std::cout << "in type name"<<*t<<"\n";
+        std::cout << "in type name "<<*t<<"\n";
         if(defined_type[t->toString()]) {
             std::cout << "returning from presence\n";
             return(defined_type[t->toString()]);

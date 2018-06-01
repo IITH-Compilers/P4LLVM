@@ -151,6 +151,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
         args->setName(std::string(p->name.name));
         AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
         backend->st.insert("alloca_"+std::string(p->name.name),alloca);
+        backend->Builder.CreateStore(args, alloca);       
         args++;
     }
     std::cout << "here3\n";

@@ -658,7 +658,7 @@ bool ControlConverter::preorder(const IR::P4Action* t){
 
     for (auto param : *(t->parameters)->getEnumerator()) {
         //add this parameter type to args
-        args.push_back(backend->getCorrespondingType(param->type));
+        args.push_back(backend->getType(param->type));
         names.push_back("alloca_"+std::string(param->name.name));
         allnames.insert(std::string(param->name.name));
         MYDEBUG(std::cout << param->name.name << "\n";)
@@ -780,7 +780,7 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
     auto pl = cont->type->getApplyParameters();
     std::vector<Type*> control_function_args; 
     for (auto p : pl->parameters)
-        control_function_args.push_back(backend->getCorrespondingType(p->type)); // push type of parameter
+        control_function_args.push_back(backend->getType(p->type)); // push type of parameter
     
     FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
     Function *control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(cont->getName().toString()), backend->TheModule.get());

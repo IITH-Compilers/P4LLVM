@@ -226,8 +226,9 @@ public:
     Type* getType(const IR::Type *t) {
         assert(t != nullptr && "Type cannot be empty");    
         Type* type = getCorrespondingType(t);
-        if(type->isArrayTy()) {
-            auto width = type->getArrayNumElements();
+        if(type->isVectorTy()) {
+            auto seqtype = dyn_cast<SequentialType>(type);
+            auto width = seqtype->getNumElements();
             return Type::getIntNTy(TheContext, width);
         }
         return type;
