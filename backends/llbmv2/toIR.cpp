@@ -29,7 +29,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 return ConstantInt::get(backend->Builder.getInt32Ty(),errorValue);        
             }
             Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
-            ex->dump();
+            // ex->dump();
             MYDEBUG(std::cout << e->to<IR::Member>()->member.name << std::endl;)
             int ext_i = backend->structIndexMap[((PointerType *)ex->getType())->getElementType()][std::string(e->to<IR::Member>()->member.name)];
             MYDEBUG(std::cout << "processed expression inside member, retrieved from backend->structIndexMap as - " << ext_i << std::endl;)
@@ -38,7 +38,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             idx.push_back(ConstantInt::get(backend->TheContext, llvm::APInt(32, ext_i, false)));
             ex = backend->Builder.CreateGEP(ex, idx);
             MYDEBUG(std::cout << "created GEP\n";)
-            MYDEBUG(ex->dump();)
+            // MYDEBUG(ex->dump();)
             if (required_alloca) return ex;
             else return backend->Builder.CreateLoad(ex);
         }
@@ -70,7 +70,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
         else   {
             std::cout << "creating load..\n";
             auto a = backend->Builder.CreateLoad(v);
-            a->dump();
+            // a->dump();
             return a;
         }
     }

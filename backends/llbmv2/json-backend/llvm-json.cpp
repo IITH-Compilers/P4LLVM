@@ -3,7 +3,9 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include <vector>
 #include "../JsonObjects.h"
 // #include "../helpers.h"
@@ -20,64 +22,30 @@ struct JsonBackend : public ModulePass
 {
 public:
     static char ID;
-		JsonBackend() : ModulePass(ID) {
-			json = new LLBMV2::JsonObjects();
+	JsonBackend() : ModulePass(ID) {
+		json = new LLBMV2::JsonObjects();
+	}
+
+	virtual bool runOnModule(Module &M) {
+		// initialize json objects
+		populateJsonObjects(M);
+		populateStruct2Type(M.getIdentifiedStructTypes(),
+												M.getNamedMetadata("header"),
+												M.getNamedMetadata("struct"),
+												M.getNamedMetadata("header_union"));
+		emitHeaders(M);
+		// Iterate on functions
+		for (auto fun = M.begin(); fun != M.end(); fun++) {
+			errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
+			runOnFunction(&*fun);
 		}
-
-		virtual bool runOnModule(Module &M)
-    {
-			// initialize json objects
-			populateJsonObjects(M);
-			populateStruct2Type(M.getIdentifiedStructTypes(),
-													M.getNamedMetadata("header"),
-													M.getNamedMetadata("struct"),
-													M.getNamedMetadata("header_union"));
-			// emitHeaderTypes();
-			auto structs = M.getIdentifiedStructTypes();
-			NamedMDNode *header_md = M.getNamedMetadata("header");
-			// NamedMDNode *struct_md = M.getNamedMetadata("struct");
-			// NamedMDNode *header_union_md = M.getNamedMetadata("header_union");
-			if (header_md->getOperand(0)->getNumOperands() != 0)
-				emitHeaderTypes(structs, header_md);
-			// if (struct_md->getOperand(0)->getNumOperands() != 0)
-			// 	emitStructTypes(structs, struct_md);
-			// errs() << "No of struct types are: " << structs.size() << "\n";
-			// if(struct_md != nullptr) {
-			//     errs() << "No of operands in struct : " << struct_md->getNumOperands() << "\n";
-			//     errs() << "operand: " << dyn_cast<MDString>(struct_md->getOperand(0)->getOperand(0))->getString() << "\n";
-			// }
-			// else
-			//     errs() << "struct_md is null\n";
-
-			// if (header_md != nullptr) {
-			//     errs() << "No of operands in header : " << header_md->getNumOperands() << "\n";
-			//     errs() << "operand: " << header_md->getOperand(0)->getNumOperands() << "\n";
-			// }
-			// else
-			//     errs() << "header_md is null\n";
-
-			// if (header_union_md != nullptr) {
-			//     errs() << "No of operands in header_union : " << header_union_md->getNumOperands() << "\n";
-			//     errs() << "operand: " << header_union_md->getOperand(0)->getNumOperands() << "\n";
-			// }
-			// else
-			//     errs() << "header_union_md is null\n";
-
-			// for(auto structtype : structs) {
-			//     errs() << "Name of the struct is :" << structtype->getName() << "\n";
-			// }
-			// Iterate on functions
-			for (auto fun = M.begin(); fun != M.end(); fun++)
-			{
-				errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
-				runOnFunction(&*fun);
-      }
-			printJsonToFile(M.getSourceFileName()+".ll.json");
-			return false;
-    }
-    bool runOnFunction(Function *F);
-    void emitHeaderTypes(std::vector<StructType *>&, NamedMDNode *);
-		void emitStructTypes(std::vector<StructType *>&, NamedMDNode *);
+		printJsonToFile(M.getSourceFileName()+".ll.json");
+		return false;
+	}
+	bool runOnFunction(Function *F);
+	void emitHeaders(Module &M);
+	void emitHeaderTypes(std::vector<StructType *>&, NamedMDNode *);
+	void emitStructTypes(std::vector<StructType *>&, NamedMDNode *);
 
 private:
 		Util::JsonObject jsonTop;
@@ -97,17 +65,42 @@ private:
 														NamedMDNode *header_union_md);
 		LLBMV2::ConvertHeaders ch;
 		void printJsonToFile(const std::string fn);
-		std::map<llvm::StructType*, std::string> struct2Type;
+		std::map<llvm::StructType*, std::string> *struct2Type;
 };
 }
 
 char JsonBackend::ID = 0;
+
+void JsonBackend::emitHeaders(Module &M) {
+	// Collect local variable.
+	// A local varible is the instance that is not from parameters list
+	// Finds all the allocas that are not of function paramerter
+	// FIXME: To differentiate local allocas from param allocas
+	// 		This code checks for struct names, if there is no name it is local
+	SmallVector<AllocaInst*, 8> *allocaList = new SmallVector<AllocaInst*, 8>();
+	for(auto fn = M.begin(); fn != M.end(); fn++) {
+		for(auto inst = inst_begin(&*fn); inst != inst_end(&*fn); inst++) {
+			if(auto alloc = dyn_cast<AllocaInst>(&*inst)) {
+				if(alloc->getAllocatedType()->isStructTy() &&
+				   dyn_cast<StructType>(alloc->getAllocatedType())->getName() == "") {
+					allocaList->push_back(alloc);
+				}
+				else if(!alloc->getAllocatedType()->isStructTy()) {
+					// All non-stuct types are local, as params won't contian non-stuct type
+					allocaList->push_back(alloc);
+				}
+			}
+		}
+	}
+	ch.processHeaders(allocaList, struct2Type, json);
+}
 
 void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 													NamedMDNode *header_md,
 													NamedMDNode *struct_md,
 													NamedMDNode *header_union_md) {
 
+	struct2Type = new std::map<llvm::StructType*, std::string>();
 	for (auto st : structs) {
 		bool found = false;
 		for (auto op = 0u; op != header_md->getOperand(0)->getNumOperands(); op++) {
@@ -115,7 +108,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString())) {
 				errs() << st->getName() << " is of Header type\n";
-				struct2Type[st] = "header";
+				(*struct2Type)[st] = "header";
 				found = true;
 				break;
 			}
@@ -129,7 +122,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			if (st->getName().equals(mdstr->getString()))
 			{
 				errs() << st->getName() << " is of struct type\n";
-				struct2Type[st] = "structure";
+				(*struct2Type)[st] = "struct";
 				found = true;
 				break;
 			}
@@ -143,7 +136,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			if (st->getName().equals(mdstr->getString()))
 			{
 				errs() << st->getName() << " is of header_unionb type\n";
-				struct2Type[st] = "header_union";
+				(*struct2Type)[st] = "header_union";
 				found = true;
 				break;
 			}
@@ -203,20 +196,20 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
 
-void JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNode *header_md) {
-		assert(header_md->getNumOperands() == 1 && "Header namedMetadata should have only one operand.");
-    for(auto st: structs) {
-			for (auto op = 0; op != header_md->getOperand(0)->getNumOperands(); op++) {
-				MDString *mdstr = dyn_cast<MDString>(header_md->getOperand(0)->getOperand(op));
-				assert(mdstr != nullptr);
-				if (st->getName().equals(mdstr->getString())) {
-					errs() << st->getName() << " is of Header type\n";
-					ch.addHeaderType(st, json);
-					errs() << "successfully added a header\n";
-				}
-			}
-		}
-}
+// void JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNode *header_md) {
+// 		assert(header_md->getNumOperands() == 1 && "Header namedMetadata should have only one operand.");
+//     for(auto st: structs) {
+// 			for (auto op = 0; op != header_md->getOperand(0)->getNumOperands(); op++) {
+// 				MDString *mdstr = dyn_cast<MDString>(header_md->getOperand(0)->getOperand(op));
+// 				assert(mdstr != nullptr);
+// 				if (st->getName().equals(mdstr->getString())) {
+// 					errs() << st->getName() << " is of Header type\n";
+// 					ch.addHeaderType(st, struct2Type, json);
+// 					errs() << "successfully added a header\n";
+// 				}
+// 			}
+// 		}
+// }
 
 // void JsonBackend::emitStructTypes(std::vector<StructType *>& structs, NamedMDNode *struct_md) {
 // 	assert(struct_md->getNumOperands() == 1 && "Struct namedMetadata should have only one operand.");
@@ -234,6 +227,23 @@ void JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNod
 // }
 
 bool JsonBackend::runOnFunction(Function *F) {
+	// Get function arguments
+	// Emit headers recursively for each argument
+	if(F->getAttributes().getFnAttributes().hasAttribute("parser")) {
+		errs() << "Found parser function\n";
+		for(auto param = F->arg_begin(); param != F->arg_end(); param++) {
+			auto st = dyn_cast<StructType>((&*param)->getType());
+			if (st != nullptr && (*struct2Type)[st] == "struct")
+			{
+				errs() << "Calling parser function\n";
+				ch.processParams(st, struct2Type, json);
+			}
+			else {
+				errs() << "not calling processParams\n";
+				errs() << (*struct2Type)[st] << "\n";
+			}
+		}
+	}
     return true;
 }
 

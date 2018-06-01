@@ -27,6 +27,8 @@ limitations under the License.
 #include "llvm/IR/DerivedTypes.h"
 #include "lib/cstring.h"
 #include "../JsonObjects.h"
+#include "llvm/IR/Instructions.h"
+#include <set>
 
 namespace LLBMV2 {
 
@@ -39,7 +41,7 @@ class ConvertHeaders {
     // P4::ReferenceMap*    refMap;
     // P4::TypeMap*         typeMap;
     // JsonObjects*         json;
-    // std::set<cstring>    visitedHeaders;
+    std::vector<cstring>    visitedHeaders;
 
     const unsigned       boolWidth = 1;    // convert booleans to 1-bit integers
     const unsigned       errorWidth = 32;  // convert errors to 32-bit integers
@@ -50,10 +52,24 @@ class ConvertHeaders {
     void addHeaderField(JsonObjects *json, const cstring& header, const cstring& name, int size, bool is_signed);
 
  public:
-    void addHeaderType(const llvm::StructType *st, JsonObjects *json);
-    // void addTypesAndInstances(const IR::Type_StructLike* type, bool meta);
-    // void addHeaderStacks(const IR::Type_Struct* type);
-    // bool isHeaders(const IR::Type_StructLike* st);
+    void addHeaderType(llvm::StructType *st,
+                std::map<llvm::StructType *, std::string> *struct2Type,
+                JsonObjects *json);
+    void processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *allocaList,
+                std::map<llvm::StructType *, std::string> *struct2Type,
+                JsonObjects *json);
+    void addTypesAndInstances(llvm::StructType *type,
+                std::map<llvm::StructType *, std::string> *struct2Type,
+                JsonObjects *json, bool meta);
+    void addHeaderStacks(llvm::StructType *headersStruct,
+                std::map<llvm::StructType *, std::string> *struct2Type,
+                JsonObjects *json);
+    bool processParams(llvm::StructType *st,
+                std::map<llvm::StructType *, std::string> *struct2Type,
+                JsonObjects *json);
+        // void addTypesAndInstances(const IR::Type_StructLike* type, bool meta);
+    bool isHeaders(llvm::StructType *st,
+                std::map<llvm::StructType *, std::string> *struct2Type);
 
     // Visitor::profile_t init_apply(const IR::Node* node) override;
     // void end_apply(const IR::Node* node) override;

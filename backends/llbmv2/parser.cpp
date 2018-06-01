@@ -41,12 +41,12 @@ bool ParserConverter::preorder(const IR::AssignmentStatement* t) {
     std::cout << "process left expression\n";
     Value* right = toIR->processExpression(t->right);
     std::cout << "process right expression\n";    
-    right->dump();
+    // right->dump();
     if(right != nullptr)    {
         if(llvmType->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
             right = backend->Builder.CreateZExt(right, llvmType);
-        right->dump();
-        leftValue->dump();
+        // right->dump();
+        // leftValue->dump();
         backend->Builder.CreateStore(right,leftValue);           
     }
     else {
