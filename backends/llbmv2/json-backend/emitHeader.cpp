@@ -43,18 +43,14 @@ ConvertHeaders::ConvertHeaders(){
 void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                 std::map<llvm::StructType *, std::string> *struct2Type,
                 JsonObjects *json, bool meta) {
-    // scalarsTypeName = "scalars";
-    // json->add_header_type(scalarsTypeName);
-    // LOG1("Adding " << type);
     for (auto f : type->elements()) {
         // auto ft = typeMap->getType(f, true);
         if (f->isStructTy()) {
                 // The headers struct can not contain nested structures.
             auto st = dyn_cast<StructType>(f);
             if (!meta && (*struct2Type)[st] == "struct" ) {
-                errs() << "ERROR : " 
-                        << st->getName()
-                        << "should only contain headers, header stacks, or header unions\n";
+                errs() << "ERROR : "  << st->getName()
+                    << "should only contain headers, header stacks, or header unions\n";
                 return;
             }
             addHeaderType(st, struct2Type, json);
@@ -306,20 +302,21 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
         // } else if (auto stack = type->to<IR::Type_Stack>()) {
         } else if (type->isArrayTy() && type->getArrayElementType()->isStructTy()) {
             // Handle header stack
-            assert(false && "Header_stack is not yet handled");
-            // auto type = typeMap->getTypeType(stack->elementType, true);
+            // assert(false && "Header_stack is not yet handled");
+            auto ht = dyn_cast<StructType>(type->getArrayElementType());
             // BUG_CHECK(type->is<IR::Type_Header>(), "%1% not a header type", stack->elementType);
+            assert((*struct2Type)[ht] == "header" && "not a header type");
             // auto ht = type->to<IR::Type_Header>();
-            // addHeaderType(ht);
-            // cstring header_type = stack->elementType->to<IR::Type_Header>()
-            //                                         ->controlPlaneName();
-            // std::vector<unsigned> header_ids;
-            // for (unsigned i=0; i < stack->getSize(); i++) {
-            //     cstring name = v->name + "[" + Util::toString(i) + "]";
-            //     auto header_id = json->add_header(header_type, name);
-            //     header_ids.push_back(header_id);
-            // }
-            // json->add_header_stack(header_type, v->name, stack->getSize(), header_ids);
+            addHeaderType(ht, struct2Type, json);
+            cstring header_type = ht->getName().str();
+            std::vector<unsigned> header_ids;
+            for (unsigned i=0; i < type->getArrayNumElements(); i++) {
+                cstring name = header_type + "[" + std::to_string(i) + "]";
+                auto header_id = json->add_header(header_type, name);
+                header_ids.push_back(header_id);
+            }
+            json->add_header_stack(header_type, header_type+"_"+std::to_string(allocaCount),
+                                    type->getArrayNumElements(), header_ids);
         // } else if (type->is<IR::Type_Varbits>()) {
         //     // For each varbit variable we synthesize a separate header instance,
         //     // since we cannot have multiple varbit fields in a single header.

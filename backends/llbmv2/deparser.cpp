@@ -56,7 +56,7 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
         if(p->type->toString() == "packet_out")
             continue;
         control_function_args.push_back(backend->getCorrespondingType(p->type)); // push type of parameter
-        backend->getCorrespondingType(p->type)->dump();
+        // backend->getCorrespondingType(p->type)->dump();
     }
     
     FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
