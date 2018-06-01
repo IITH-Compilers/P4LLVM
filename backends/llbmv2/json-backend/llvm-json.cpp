@@ -60,9 +60,9 @@ private:
 		Util::JsonArray *field_aliases;
 		void populateJsonObjects(Module &M);
 		void populateStruct2Type(std::vector<StructType *> structs,
-														NamedMDNode *header_md,
-														NamedMDNode *struct_md,
-														NamedMDNode *header_union_md);
+								NamedMDNode *header_md,
+								NamedMDNode *struct_md,
+								NamedMDNode *header_union_md);
 		LLBMV2::ConvertHeaders ch;
 		void printJsonToFile(const std::string fn);
 		std::map<llvm::StructType*, std::string> *struct2Type;
@@ -196,36 +196,6 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
 
-// void JsonBackend::emitHeaderTypes(std::vector<StructType *>& structs, NamedMDNode *header_md) {
-// 		assert(header_md->getNumOperands() == 1 && "Header namedMetadata should have only one operand.");
-//     for(auto st: structs) {
-// 			for (auto op = 0; op != header_md->getOperand(0)->getNumOperands(); op++) {
-// 				MDString *mdstr = dyn_cast<MDString>(header_md->getOperand(0)->getOperand(op));
-// 				assert(mdstr != nullptr);
-// 				if (st->getName().equals(mdstr->getString())) {
-// 					errs() << st->getName() << " is of Header type\n";
-// 					ch.addHeaderType(st, struct2Type, json);
-// 					errs() << "successfully added a header\n";
-// 				}
-// 			}
-// 		}
-// }
-
-// void JsonBackend::emitStructTypes(std::vector<StructType *>& structs, NamedMDNode *struct_md) {
-// 	assert(struct_md->getNumOperands() == 1 && "Struct namedMetadata should have only one operand.");
-// 	for (auto st : structs) {
-// 		for (auto op = 0; op != struct_md->getOperand(0)->getNumOperands(); op++) {
-// 			MDString *mdstr = dyn_cast<MDString>(struct_md->getOperand(0)->getOperand(op));
-// 			assert(mdstr != nullptr);
-// 			if (st->getName().equals(mdstr->getString())) {
-// 				errs() << st->getName() << " is of Struct type\n";
-// 				ch.addHeaderType(st, json);
-// 				errs() << "successfully converted Struct type\n";
-// 			}
-// 		}
-// 	}
-// }
-
 bool JsonBackend::runOnFunction(Function *F) {
 	// Get function arguments
 	// Emit headers recursively for each argument
@@ -243,6 +213,8 @@ bool JsonBackend::runOnFunction(Function *F) {
 				errs() << (*struct2Type)[st] << "\n";
 			}
 		}
+		// Padding is calulated for scalars, add it to json now.
+		ch.addScalarPadding(json);
 	}
     return true;
 }

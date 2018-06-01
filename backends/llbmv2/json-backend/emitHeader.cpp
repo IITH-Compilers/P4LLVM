@@ -32,6 +32,7 @@ Util::JsonArray* ConvertHeaders::pushNewArray(Util::JsonArray* parent) {
 
 ConvertHeaders::ConvertHeaders(){
     // setName("ConvertHeaders");
+    genNameMap = new std::map<std::string, unsigned>();
 }
 
 /**
@@ -105,13 +106,11 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                 scalars_width += boolWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
             } else if (f->isIntegerTy()) {
-                // auto tb = f->to<IR::Type_Bits>();
                 unsigned bitWidth = f->getIntegerBitWidth();
                 addHeaderField(json, scalarsTypeName, newName, bitWidth, true);
                 scalars_width += bitWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
             } else if (f->isArrayTy() && f->getArrayElementType()->isIntegerTy(1)) {
-                // auto tb = f->to<IR::Type_Bits>();
                 unsigned bitWidth = f->getArrayNumElements();
                 addHeaderField(json, scalarsTypeName, newName, bitWidth, false);
                 scalars_width += bitWidth;
@@ -228,21 +227,21 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
         } else if (f->isIntegerTy(1)) { // Bool Type
             auto field = pushNewArray(fields);
             field->append(st->getName().str()
-                            + ".field" + std::to_string(fieldCount++));
+                            + ".field_" + std::to_string(fieldCount++));
             field->append(boolWidth);
             field->append(false);
             max_length += boolWidth;
         } else if (f->isIntegerTy()) { // Integet Type
             auto field = pushNewArray(fields);
             field->append(st->getName().str()
-                            + ".field" + std::to_string(fieldCount++));
+                            + ".field_" + std::to_string(fieldCount++));
             field->append(f->getIntegerBitWidth());
             field->append(true);
             max_length += f->getIntegerBitWidth();
         } else if (f->isArrayTy() && f->getArrayElementType()->isIntegerTy(1)) { // bits<> Type : is considerd as Array of 1 bits
             auto field = pushNewArray(fields);
             field->append(st->getName().str()
-                            + ".field" + std::to_string(fieldCount++));
+                            + ".field_" + std::to_string(fieldCount++));
             field->append(f->getArrayNumElements());
             field->append(false);
             max_length += f->getArrayNumElements();
@@ -253,7 +252,7 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
             errs() << f->getTypeID()
                     << " : unexpected type in "
                     << st->getName().str()
-                    << ".field" << std::to_string(fieldCount) << "\n";
+                    << ".field_" << std::to_string(fieldCount) << "\n";
             exit(1);
         }
     }
@@ -285,7 +284,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
                                     std::map<llvm::StructType *, std::string> *struct2Type,
                                     JsonObjects *json)
 {
-    scalarsTypeName = "scalars_0";
+    scalarsTypeName = genName("scalars_");
     json->add_header_type(scalarsTypeName);
     // bit<n>, bool, error are packed into scalars type,
     // varbit, struct and stack introduce new header types
@@ -413,7 +412,6 @@ bool ConvertHeaders::processParams(llvm::StructType *st,
             addTypesAndInstances(st, struct2Type, json, true);
         }
     }
-    // }
     return false;
 }
 

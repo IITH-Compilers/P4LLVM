@@ -67,18 +67,25 @@ class ConvertHeaders {
     bool processParams(llvm::StructType *st,
                 std::map<llvm::StructType *, std::string> *struct2Type,
                 JsonObjects *json);
-        // void addTypesAndInstances(const IR::Type_StructLike* type, bool meta);
     bool isHeaders(llvm::StructType *st,
                 std::map<llvm::StructType *, std::string> *struct2Type);
-
-    // Visitor::profile_t init_apply(const IR::Node* node) override;
-    // void end_apply(const IR::Node* node) override;
-
-    // bool preorder(const IR::PackageBlock* b) override;
-    // bool preorder(const IR::Parameter* param) override;
+    void addScalarPadding(JsonObjects *json) {
+        unsigned padding = scalars_width % 8;
+        if (padding != 0) {
+            cstring name = genName("_padding_");
+            addHeaderField(json, scalarsTypeName, name, 8 - padding, false);
+        }
+    }
 
     ConvertHeaders();
-    // ConvertHeaders(Backend* backend, cstring scalarsName);
+private:
+    std::map<std::string, unsigned> *genNameMap;
+    std::string genName(std::string name) {
+        if(genNameMap->find(name) == genNameMap->end()) {
+            (*genNameMap)[name] = 0;
+        }
+        return name + std::to_string((*genNameMap)[name]++);
+    }
 };
 
 }  // namespace LLBMV2
