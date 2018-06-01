@@ -356,7 +356,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
 
     // always-have metadata instance
     json->add_metadata(scalarsTypeName, scalarsName);
-    json->add_metadata("standard_metadata", "standard_metadata");
+    json->add_metadata("standard_metadata_t", "standard_metadata");
     // return Inspector::init_apply(node);
 }
 
@@ -401,17 +401,18 @@ bool ConvertHeaders::processParams(llvm::StructType *st,
         visitedHeaders.push_back(st->getName().str());
 
     // if (st->getAnnotation("metadata")) {
-    //     addHeaderType(st);
-    // }
-    // else {
-    auto isHeader = isHeaders(st, struct2Type);
-    if (isHeader) {
-        addTypesAndInstances(st, struct2Type, json, false);
-        addHeaderStacks(st, struct2Type, json);
-    } else {
-        addTypesAndInstances(st, struct2Type, json, true);
+    if (st->getName().str() == "struct.standard_metadata_t") {
+        addHeaderType(st, struct2Type, json);
     }
-    // }
+    else {
+        auto isHeader = isHeaders(st, struct2Type);
+        if (isHeader) {
+            addTypesAndInstances(st, struct2Type, json, false);
+            addHeaderStacks(st, struct2Type, json);
+        } else {
+            addTypesAndInstances(st, struct2Type, json, true);
+        }
+    }
     // }
     return false;
 }
