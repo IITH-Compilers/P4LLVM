@@ -52,17 +52,26 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
     backend->st.enterScope();
     auto pl = cont->type->getApplyParameters();
     std::vector<Type*> control_function_args; 
-    for (auto p : pl->parameters)
+    for (auto p : pl->parameters) {
+        if(p->type->toString() == "packet_out")
+            continue;
         control_function_args.push_back(backend->getCorrespondingType(p->type)); // push type of parameter
+        backend->getCorrespondingType(p->type)->dump();
+    }
     
     FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
     Function *control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(cont->getName().toString()), backend->TheModule.get());
     backend->function = control_function;
-    Function::arg_iterator args = control_function->arg_begin();
 
+    control_function->setAttributes(control_function->getAttributes().addAttribute(backend->TheContext, AttributeList::FunctionIndex, "Deparser"));
+    assert(control_function->getAttributes().hasAttributes(AttributeList::FunctionIndex) && "attribute not set");
+
+    Function::arg_iterator args = control_function->arg_begin();
     BasicBlock *init_block = BasicBlock::Create(backend->TheContext, "entry", control_function);
     backend->Builder.SetInsertPoint(init_block);
     for (auto p : pl->parameters){
+        if(p->type->toString() == "packet_out")
+            continue;
         args->setName(std::string(p->name.name));
         AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
         backend->st.insert("alloca_"+std::string(p->name.name),alloca);
@@ -70,6 +79,7 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
         args++;
     }
     convertDeparserBody(&cont->body->components);
+    backend->Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(backend->TheContext), 1));
 }
 
 bool ConvertDeparser::preorder(const IR::PackageBlock* block) {
