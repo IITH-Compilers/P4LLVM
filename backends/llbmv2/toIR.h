@@ -32,7 +32,7 @@ public:
     bool preorder(const IR::BlockStatement* b) override;
     bool preorder(const IR::MethodCallStatement* stat) override;    
     
-    void createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name);
+    Value* createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name);
     llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr, bool required_alloca=false);    
 };
 

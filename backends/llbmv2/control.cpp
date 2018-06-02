@@ -665,7 +665,6 @@ bool ControlConverter::preorder(const IR::P4Action* t){
     }
     
 
-    int actual_argsize = args.size();
     action_call_args[t->name.name] = std::vector<llvm::Value *>(0);
     //add more parameters from outer scopes
     // for (int i = st.getCurrentScope(); i>=st.getCurrentScope()-1 && i>=0 ; i--) {
@@ -851,6 +850,44 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
     return false;
 }
 
+void ChecksumConverter::convertChecksum(const IR::BlockStatement *block, bool verify) {
+    auto typeMap = backend->getTypeMap();
+    auto refMap = backend->getRefMap();
+    for (auto stat : block->components) {
+        if (auto blk = stat->to<IR::BlockStatement>()) {
+            convertChecksum(blk, verify);
+            continue;
+        } 
+        else if (auto mc = stat->to<IR::MethodCallStatement>()) {
+            auto mi = P4::MethodInstance::resolve(mc, refMap, typeMap);
+            if (auto em = mi->to<P4::ExternFunction>()) {
+                cstring functionName = em->method->name.name;
+                if ((verify && (functionName == v1model.verify_checksum.name ||
+                                functionName == v1model.verify_checksum_with_payload.name)) ||
+                    (!verify && (functionName == v1model.update_checksum.name ||
+                                 functionName == v1model.update_checksum_with_payload.name))) {
+
+                    BUG_CHECK(mi->expr->arguments->size() == 4, "%1%: Expected 4 arguments", mi);
+
+                    auto ei = P4::EnumInstance::resolve(mi->expr->arguments->at(3), typeMap);
+                    if (ei->name != "csum16") {
+                        ::error("%1%: the only supported algorithm is csum16",
+                                mi->expr->arguments->at(3));
+                        return;
+                    }
+                    toIR->createExternFunction(3,mi->expr,functionName);
+                    continue;
+                }
+            }
+        }
+        ::error("%1%: Only calls to %2% or %3% allowed", stat,
+                verify ? v1model.verify_checksum.name : v1model.update_checksum.name,
+                verify ? v1model.verify_checksum_with_payload.name :
+                v1model.update_checksum_with_payload.name);
+    }
+}
+
+
 bool ChecksumConverter::preorder(const IR::PackageBlock *block) {
     for (auto it : block->constantValue) {
         if (it.second->is<IR::ControlBlock>()) {
@@ -862,19 +899,47 @@ bool ChecksumConverter::preorder(const IR::PackageBlock *block) {
 
 bool ChecksumConverter::preorder(const IR::ControlBlock* block) {
     auto it = backend->update_checksum_controls.find(block->container->name);
+    Function *control_function;
+    if (backend->update_checksum_controls.find(block->container->name) != backend->update_checksum_controls.end() ||
+        backend->verify_checksum_controls.find(block->container->name) !=  backend->verify_checksum_controls.end()) {
+        if (backend->target == Target::SIMPLE) {
+            backend->st.enterScope();
+            auto pl = block->container->type->getApplyParameters();
+            std::vector<Type*> control_function_args; 
+            for (auto p : pl->parameters)
+                control_function_args.push_back(backend->getType(p->type)); // push type of parameter
+            
+            FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
+            control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(block->container->name.toString()), backend->TheModule.get());
+            backend->function = control_function;
+            Function::arg_iterator args = control_function->arg_begin();
+
+            BasicBlock *init_block = BasicBlock::Create(backend->TheContext, "entry", control_function);
+            backend->Builder.SetInsertPoint(init_block);
+            for (auto p : pl->parameters){
+                args->setName(std::string(p->name.name));
+                AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+                backend->st.insert("alloca_"+std::string(p->name.name),alloca);
+                backend->Builder.CreateStore(args, alloca);        
+                args++;
+            }
+        }        
+    }
     if (it != backend->update_checksum_controls.end()) {
         if (backend->target == Target::SIMPLE) {
-            P4V1::SimpleSwitch* ss = backend->getSimpleSwitch();
-            ss->convertChecksum(block->container->body, backend->json->checksums,
-                                backend->json->calculations, false);
+            convertChecksum(block->container->body,false);
+            backend->Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(backend->TheContext), 1));   
+            control_function->setAttributes(control_function->getAttributes().addAttribute(backend->TheContext, AttributeList::FunctionIndex, "update_checksum"));
+            assert(control_function->getAttributes().hasAttributes(AttributeList::FunctionIndex) && "attribute not set");   
         }
     } else {
         it = backend->verify_checksum_controls.find(block->container->name);
         if (it != backend->verify_checksum_controls.end()) {
             if (backend->target == Target::SIMPLE) {
-                P4V1::SimpleSwitch* ss = backend->getSimpleSwitch();
-                ss->convertChecksum(block->container->body, backend->json->checksums,
-                                    backend->json->calculations, true);
+                convertChecksum(block->container->body, true);
+                backend->Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(backend->TheContext), 1)); 
+                control_function->setAttributes(control_function->getAttributes().addAttribute(backend->TheContext, AttributeList::FunctionIndex, "verify_checksum"));
+                assert(control_function->getAttributes().hasAttributes(AttributeList::FunctionIndex) && "attribute not set");     
             }
         }
     }
@@ -882,3 +947,6 @@ bool ChecksumConverter::preorder(const IR::ControlBlock* block) {
 }
 
 }  // namespace LLBMV2
+
+
+
