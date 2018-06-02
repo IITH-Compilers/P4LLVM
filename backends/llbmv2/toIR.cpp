@@ -502,7 +502,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
 }
 
 bool ToIR::preorder(const IR::Declaration_Variable* t) {
-    auto type = backend->getCorrespondingType(typemap->getType(t));
+    auto type = backend->getCorrespondingType(t->type);
     Value *alloca = backend->Builder.CreateAlloca(type);
     backend->st.insert("alloca_"+t->getName(),alloca);       
     return false;
