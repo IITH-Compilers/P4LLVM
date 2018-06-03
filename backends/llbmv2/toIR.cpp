@@ -10,7 +10,7 @@ Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, c
             for(auto c : inst->components) {
                 std::cout << "processing - " << c<<"\n";
                 llvmValue = processExpression(c);
-                args.push_back(llvmValue->getType());
+                args.push_back(PointerType::get(llvmValue->getType(), 0));
                 assert(llvmValue != nullptr && "processExpression should not return null");
                 param.push_back(llvmValue);
                 llvmValue = nullptr;
@@ -509,22 +509,19 @@ bool ToIR::preorder(const IR::Declaration_Variable* t) {
 }
 
 bool ToIR::preorder(const IR::AssignmentStatement* t) {
+    std::cout << "caught in assignment stmt -- " << *t;
     Value* leftValue = processExpression(t->left, nullptr, nullptr, true);
     assert(leftValue != nullptr && "left expression in assignment can't be null");
     Type* llvmType = leftValue->getType();          
     Value* right = processExpression(t->right);
     if(right != nullptr)    {
-        std::cout << "in assignment stmt -- right\nleft val -- ";
-        leftValue->dump();
-        std::cout<<"right val--\n";
-        right->dump();
-        if(((PointerType*)llvmType)->getElementType()->isVectorTy())    {
-            std::cout << "im vector type\n";
+        auto eleTy = ((PointerType*)llvmType)->getElementType();
+        if(eleTy->isVectorTy())    {
             ((PointerType*)llvmType)->getElementType()->dump();
             right = backend->Builder.CreateBitCast(right, ((PointerType*)llvmType)->getElementType());
         }
-        else if(((PointerType*)llvmType)->getElementType ()->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
-            right = backend->Builder.CreateZExt(right, llvmType);
+        else if(eleTy->isIntegerTy() && (eleTy->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())) 
+            right = backend->Builder.CreateZExt(right, ((PointerType*)llvmType)->getElementType());
         backend->Builder.CreateStore(right,leftValue);           
     }
     else {

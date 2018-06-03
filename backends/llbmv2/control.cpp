@@ -294,6 +294,8 @@ ControlConverter::convertTable(const CFG::TableNode* node,
     auto key = table->getKey();
     auto tkey = mkArrayField(result, "key");
     conv->simpleExpressionsOnly = true;
+    std::vector<Type*> members;
+
 
     if (key != nullptr) {
         for (auto ke : key->keyElements) {
@@ -341,19 +343,13 @@ ControlConverter::convertTable(const CFG::TableNode* node,
                 mask = Util::maskFromSlice(h, l);
             }
 
-            auto keyelement = new Util::JsonObject();
-            keyelement->emplace("match_type", match_type);
-
-            auto jk = conv->convert(expr);
-            keyelement->emplace("target", jk->to<Util::JsonObject>()->get("value"));
-            if (mask != 0)
-                keyelement->emplace("mask", stringRepr(mask, ROUNDUP(expr->type->width_bits(), 8)));
-            else
-                keyelement->emplace("mask", Util::JsonValue::null);
-            tkey->append(keyelement);
+            auto val = toIR->processExpression(expr);
+            auto type = val->getType();
+            members.push_back(type);
         }
     }
-    result->emplace("match_type", table_match_type);
+    StructType *structTable = llvm::StructType::create(backend->TheContext, members, "table."+table->name);
+    
     conv->simpleExpressionsOnly = false;
 
     auto impl = table->properties->getProperty(LLBMV2::TableAttributes::implementationName);
@@ -658,7 +654,10 @@ bool ControlConverter::preorder(const IR::P4Action* t){
 
     for (auto param : *(t->parameters)->getEnumerator()) {
         //add this parameter type to args
-        args.push_back(backend->getType(param->type));
+        if(param->hasOut())
+            args.push_back(PointerType::get(backend->getType(param->type), 0));
+        else
+            args.push_back(backend->getType(param->type));
         names.push_back("alloca_"+std::string(param->name.name));
         allnames.insert(std::string(param->name.name));
         MYDEBUG(std::cout << param->name.name << "\n";)
@@ -694,9 +693,13 @@ bool ControlConverter::preorder(const IR::P4Action* t){
     {
         //name the argument
         arg->setName(Twine(*names_iter));
-        AllocaInst *alloca = backend->Builder.CreateAlloca(arg->getType());
-        backend->st.insert(std::string(*names_iter),alloca);
-        backend->Builder.CreateStore(arg, alloca);
+        if(!arg->getType()->isPointerTy()) {
+            AllocaInst *alloca = backend->Builder.CreateAlloca(arg->getType());
+            backend->Builder.CreateStore(arg, alloca);
+            backend->st.insert(std::string(*names_iter),alloca);
+        }
+        else
+            backend->st.insert(std::string(*names_iter),arg);            
         arg->dump();
         names_iter++;
     }
@@ -761,25 +764,11 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
     SharedActionSelectorCheck selector_check(refMap, typeMap);
     block->apply(selector_check);
 
-    // Tables are created prior to the other local declarations
-    for (auto node : cfg->allNodes) {
-        if (node->is<CFG::TableNode>()) {
-            auto j = convertTable(node->to<CFG::TableNode>(), action_profiles, selector_check);
-            if (::errorCount() > 0)
-                return false;
-            tables->append(j);
-        } else if (node->is<CFG::IfNode>()) {
-            auto j = convertIf(node->to<CFG::IfNode>(), cont->name);
-            if (::errorCount() > 0)
-                return false;
-            conditionals->append(j);
-        }
-    }
     backend->st.enterScope();
     auto pl = cont->type->getApplyParameters();
     std::vector<Type*> control_function_args; 
     for (auto p : pl->parameters)
-        control_function_args.push_back(backend->getType(p->type)); // push type of parameter
+        control_function_args.push_back(PointerType::get(backend->getType(p->type), 0)); // push type of parameter
     
     FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
     Function *control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(cont->getName().toString()), backend->TheModule.get());
@@ -790,32 +779,12 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
     backend->Builder.SetInsertPoint(init_block);
     for (auto p : pl->parameters){
         args->setName(std::string(p->name.name));
-        AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
-        backend->st.insert("alloca_"+std::string(p->name.name),alloca);
-        backend->Builder.CreateStore(args, alloca);        
+        // AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+        backend->st.insert("alloca_"+std::string(p->name.name),args);
+        // backend->Builder.CreateStore(args, alloca);        
         args++;
     }
-    // visit(t->annotations);
-    // visit(t->getTypeParameters());    // visits TypeParameters
-    // MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";)
-    // for (auto p : cont->getApplyParameters()->parameters) {
-    //     auto type = typeMap->getType(p);
-    //     bool initialized = (p->direction == IR::Direction::In || p->direction == IR::Direction::InOut);
-    //     // auto value = factory->create(type, !initialized); // Create type declaration
-    // }  
-    // MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";);
-    
-    // if (cont->constructorParams->size() != 0) 
-    //     visit(t->constructorParams); //visits Vector -> ParameterList
-    // visit(&t->controlLocals); // visits Vector -> Declaration 
-    // //Declare basis block for each state
-    // MYDEBUG(std::cout << "FLAG\t" << __LINE__ << "\n";);
-    // visit(t->body);
-    // st.exitScope();
-    // MYDEBUG(std::cout << "FLAG\t" << __LINE__<< "\n";);
-    // Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(TheContext), 1));
-    // return true;
-    // hanw: skip for PSA
+
     for (auto c : cont->controlLocals) {
         if(auto s = c->to<IR::Declaration_Variable>())  {
             s->apply(*toIR);    
@@ -826,9 +795,11 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
             continue;
         }
         if (c->is<IR::Declaration_Constant>() ||
-            c->is<IR::P4Action>() ||
-            c->is<IR::P4Table>())
-            continue;
+            c->is<IR::P4Table>()){
+                std::cout << "==================I'm a table================== \n";
+                std::cout << *c <<"\n";
+                std::cout << "===============================================\n";
+            continue;}
         if (c->is<IR::Declaration_Instance>()) {
             auto bl = block->getValue(c);
             CHECK_NULL(bl);
@@ -845,6 +816,27 @@ bool ControlConverter::preorder(const IR::ControlBlock* block) {
         }
         P4C_UNIMPLEMENTED("%1%: not yet handled", c);
     }
+
+    for (auto node : cfg->allNodes) {
+        if (auto tn = node->to<CFG::TableNode>()) {
+            auto table = tn->table;
+            std::cout << "#################Table in cfg#####################\n";
+            std::cout << *tn->table << "\ninvoked as -- "<<*tn->invocation<<"\n";
+            std::cout << "###################################################\n";
+            
+            auto j = convertTable(node->to<CFG::TableNode>(), action_profiles, selector_check);
+            if (::errorCount() > 0)
+                return false;
+            tables->append(j);
+        }
+        else if (node->is<CFG::IfNode>()) {
+            auto j = convertIf(node->to<CFG::IfNode>(), cont->name);
+            if (::errorCount() > 0)
+                return false;
+            conditionals->append(j);
+        }
+    }
+
     backend->Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(backend->TheContext), 1));  
     json->pipelines->append(result);
     return false;
@@ -907,7 +899,7 @@ bool ChecksumConverter::preorder(const IR::ControlBlock* block) {
             auto pl = block->container->type->getApplyParameters();
             std::vector<Type*> control_function_args; 
             for (auto p : pl->parameters)
-                control_function_args.push_back(backend->getType(p->type)); // push type of parameter
+                control_function_args.push_back(PointerType::get(backend->getType(p->type),0)); // push type of parameter
             
             FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
             control_function = Function::Create(control_function_type, Function::ExternalLinkage,  std::string(block->container->name.toString()), backend->TheModule.get());
@@ -918,9 +910,9 @@ bool ChecksumConverter::preorder(const IR::ControlBlock* block) {
             backend->Builder.SetInsertPoint(init_block);
             for (auto p : pl->parameters){
                 args->setName(std::string(p->name.name));
-                AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
-                backend->st.insert("alloca_"+std::string(p->name.name),alloca);
-                backend->Builder.CreateStore(args, alloca);        
+                // AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+                backend->st.insert("alloca_"+std::string(p->name.name),args);
+                // backend->Builder.CreateStore(args, alloca);        
                 args++;
             }
         }        

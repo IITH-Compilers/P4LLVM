@@ -55,7 +55,7 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
     for (auto p : pl->parameters) {
         if(p->type->toString() == "packet_out")
             continue;
-        control_function_args.push_back(backend->getCorrespondingType(p->type)); // push type of parameter
+        control_function_args.push_back(PointerType::get(backend->getCorrespondingType(p->type),0)); // push type of parameter
         backend->getCorrespondingType(p->type)->dump();
     }
     
@@ -73,9 +73,9 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
         if(p->type->toString() == "packet_out")
             continue;
         args->setName(std::string(p->name.name));
-        AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
-        backend->st.insert("alloca_"+std::string(p->name.name),alloca);
-        backend->Builder.CreateStore(args, alloca);        
+        // AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+        backend->st.insert("alloca_"+std::string(p->name.name),args);
+        // backend->Builder.CreateStore(args, alloca);        
         args++;
     }
     convertDeparserBody(&cont->body->components);

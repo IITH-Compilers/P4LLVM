@@ -126,7 +126,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
     {
         if(p->type->toString() == "packet_in")
             continue;
-        parser_function_args.push_back(backend->getCorrespondingType(p->type));
+        parser_function_args.push_back(PointerType::get(backend->getCorrespondingType(p->type), 0));
     }
     
     FunctionType *parser_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), parser_function_args, false);
@@ -149,9 +149,9 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
             continue;
         std::cout << "inserting " << p->name.name << " into st\n";
         args->setName(std::string(p->name.name));
-        AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
-        backend->st.insert("alloca_"+std::string(p->name.name),alloca);
-        backend->Builder.CreateStore(args, alloca);       
+        // AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
+        backend->st.insert("alloca_"+std::string(p->name.name),args);
+        // backend->Builder.CreateStore(args, alloca);       
         args++;
     }
     std::cout << "here3\n";
