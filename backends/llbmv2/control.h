@@ -30,6 +30,8 @@ limitations under the License.
 #include "sharedActionSelectorCheck.h"
 #include "simpleSwitch.h"
 #include "toIR.h"
+#include "frontends/p4/fromv1.0/v1model.h"
+
 
 namespace LLBMV2 {
 
@@ -64,15 +66,20 @@ class ControlConverter : public Inspector {
     explicit ControlConverter(Backend *backend) : backend(backend), toIR(new ToIR(this->backend)),
         refMap(backend->getRefMap()), typeMap(backend->getTypeMap()),
         conv(backend->getExpressionConverter()), json(backend->json)
-    { std::cout << "8888888888888888888888888888888888888888\n";setName("Control"); }
+    {setName("Control"); }
 };
 
 class ChecksumConverter : public Inspector {
     Backend* backend;
+    ToIR* toIR;
+    P4V1::V1Model& v1model;
+   
+    void convertChecksum(const IR::BlockStatement *block, bool verify);
+    
  public:
     bool preorder(const IR::PackageBlock* b) override;
     bool preorder(const IR::ControlBlock* b) override;
-    explicit ChecksumConverter(Backend *backend) : backend(backend)
+    explicit ChecksumConverter(Backend *backend) : backend(backend), toIR(new ToIR(this->backend)), v1model(P4V1::V1Model::instance)
     { setName("UpdateChecksum"); }
 };
 

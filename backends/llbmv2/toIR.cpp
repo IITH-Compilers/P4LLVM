@@ -1,6 +1,6 @@
 #include "toIR.h"
 
-void ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name)   {
+Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name)   {
     std::vector<Type*> args;
     std::vector<Value*> param;
     
@@ -10,7 +10,7 @@ void ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cst
             for(auto c : inst->components) {
                 std::cout << "processing - " << c<<"\n";
                 llvmValue = processExpression(c);
-                args.push_back(llvmValue->getType());
+                args.push_back(PointerType::get(llvmValue->getType(), 0));
                 assert(llvmValue != nullptr && "processExpression should not return null");
                 param.push_back(llvmValue);
                 llvmValue = nullptr;
@@ -27,7 +27,7 @@ void ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cst
 
     FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
     Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
-    backend->Builder.CreateCall(decl, param);
+    return backend->Builder.CreateCall(decl, param);
 }
 
 Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullptr*/, BasicBlock* bbElse/*=nullptr*/, bool required_alloca /*=false*/) {
@@ -102,7 +102,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 }
             }
             Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
-            // ex->dump();
+            //ex->dump();
             MYDEBUG(std::cout << e->to<IR::Member>()->member.name << std::endl;)
             int ext_i = backend->structIndexMap[((PointerType *)ex->getType())->getElementType()][std::string(e->to<IR::Member>()->member.name)];
             MYDEBUG(std::cout << "processed expression inside member, retrieved from backend->structIndexMap as - " << ext_i << std::endl;)
@@ -114,16 +114,16 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             std::cout << "*****************************************************************************\n";
             if(ex->getType()->getPointerElementType()->isVectorTy()) {
                 std::cout << "inside arrayty\n";
-                // ex->dump();
-                // ex->getType()->getPointerElementType()->dump();
+                //ex->dump();
+                //ex->getType()->getPointerElementType()->dump();
                 auto width = dyn_cast<SequentialType>(ex->getType()->getPointerElementType())->getNumElements();
                 std::cout << "width =-- "<<width<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!111111111\n";
                 auto x = Type::getIntNPtrTy(backend->TheContext, width);
                 auto tmp = backend->Builder.CreateBitCast(ex, x);
-                // tmp->dump();
+                //tmp->dump();
                 ex = tmp;
             }
-            // MYDEBUG(ex->dump();)
+            //MYDEBUG(ex->dump();)
             if (required_alloca) 
                 return ex;
             else {
@@ -363,15 +363,16 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
 
     if(e->is<IR::MethodCallExpression>())    {
         MYDEBUG(std::cout<<"caught mcs\n";)
-        const IR::MethodCallExpression* mce = e->to<IR::MethodCallExpression>();            
-        auto instance = P4::MethodInstance::resolve(mce,refmap,typemap);
+        const IR::MethodCallExpression* mce = e->to<IR::MethodCallExpression>();           
 
-        if (instance->is<P4::ExternMethod>()) {
-            auto em = instance->to<P4::ExternMethod>();
-            if (em->originalExternType->name == corelib.packetIn.name &&
-                em->method->name == corelib.packetIn.lookahead.name) {
+        auto minst = P4::MethodInstance::resolve(mce, refmap, typemap);
+        if (minst->is<P4::ExternMethod>()) {
+            auto extmeth = minst->to<P4::ExternMethod>();
+
+            if (extmeth->originalExternType->name == corelib.packetIn.name &&
+                extmeth->method->name == corelib.packetIn.lookahead.name) {
                 BUG_CHECK(mce->typeArguments->size() == 1,
-                        "Expected 1 type parameter for %1%", em->method);
+                        "Expected 1 type parameter for %1%", extmeth->method);
                 auto targ = mce->typeArguments->at(0);
                 auto typearg = backend->getTypeMap()->getTypeType(targ, true);
                 int width = typearg->width_bits();
@@ -380,9 +381,120 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 std::vector<Type*> args;
                 FunctionType *FT = FunctionType::get(backend->getType(typearg), args, false);
                 Function *function = Function::Create(FT, Function::ExternalLinkage,  
-                                            em->method->name.name.c_str(), backend->TheModule.get());
+                                            extmeth->method->name.name.c_str(), backend->TheModule.get());
                 return backend->Builder.CreateCall(function);    
             }
+        
+            if (extmeth->method->name.name == corelib.packetIn.extract.name) {
+                int argCount = mce->arguments->size();
+                if (argCount == 1 || argCount == 2) {
+                    auto arg = mce->arguments->at(0);
+                    auto argtype = typemap->getType(arg, true);
+                    if (!argtype->is<IR::Type_Header>()) {
+                        ::error("%1%: extract only accepts arguments with header types, not %2%",
+                                arg, argtype);
+                        return nullptr;
+                    }
+                    
+                    if (argCount == 1) {
+                        std::cout << "calling processexp from mcs of convert parser stmt: ac=1\n";
+                        return createExternFunction(1,mce,extmeth->method->name.name);                      
+                    }
+                    // if (arg->is<IR::Member>()) {
+                    //     auto mem = arg->to<IR::Member>();
+                    //     auto baseType = typemap->getType(mem->expr, true);
+                    //     if (baseType->is<IR::Type_Stack>()) {
+                    //         if (mem->member == IR::Type_Stack::next) {
+                    //             type = "stack";
+                    //             j = conv->convert(mem->expr);
+                    //         } else {
+                    //             BUG("%1%: unsupported", mem);
+                    //         }
+                    //     }
+                    // }
+
+                    if (argCount == 2) {
+                        createExternFunction(2,mce,extmeth->method->name.name);
+                        return nullptr;
+                    }                   
+                }
+            }
+            BUG("%1%: Unexpected extern method", extmeth->method->name.name);            
+        } 
+        else if (minst->is<P4::ExternFunction>()) {
+            auto extfn = minst->to<P4::ExternFunction>();
+            if (extfn->method->name.name == IR::ParserState::verify ||
+                    extfn->method->name == v1model.clone.name ||
+                    extfn->method->name == v1model.digest_receiver.name) {           
+                BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
+                return createExternFunction(2,mce,extfn->method->name);
+            }
+
+            if (extfn->method->name == v1model.clone.clone3.name ||
+                    extfn->method->name == v1model.random.name) {
+                BUG_CHECK(mce->arguments->size() == 3, "%1%: Expected 3 arguments", mce);
+                return createExternFunction(3,mce,extfn->method->name);        
+            }
+            if (extfn->method->name == v1model.hash.name) {
+                BUG_CHECK(mce->arguments->size() == 5, "%1%: Expected 5 arguments", mce);                
+                static std::set<cstring> supportedHashAlgorithms = {
+                    v1model.algorithm.crc32.name, v1model.algorithm.crc32_custom.name,
+                    v1model.algorithm.crc16.name, v1model.algorithm.crc16_custom.name,
+                    v1model.algorithm.random.name, v1model.algorithm.identity.name,
+                    v1model.algorithm.csum16.name, v1model.algorithm.xor16.name
+                };
+
+                auto ei = P4::EnumInstance::resolve(mce->arguments->at(1), typemap);
+                CHECK_NULL(ei);
+                if (supportedHashAlgorithms.find(ei->name) == supportedHashAlgorithms.end()) {
+                    ::error("%1%: unexpected algorithm", ei->name);
+                    return nullptr;
+                }
+                return createExternFunction(5,mce,extfn->method->name);          
+            }
+            if (extfn->method->name == v1model.resubmit.name ||
+                extfn->method->name == v1model.recirculate.name ||
+                extfn->method->name == v1model.truncate.name) {
+                BUG_CHECK(mce->arguments->size() == 1, "%1%: Expected 1 argument", mce);                
+                return createExternFunction(1,mce,extfn->method->name);
+            }
+            if (extfn->method->name == v1model.drop.name) {
+                BUG_CHECK(mce->arguments->size() == 0, "%1%: Expected 0 arguments", mce);                
+                return createExternFunction(0,mce,extfn->method->name);
+            }
+
+            BUG("%1%: Unexpected extern function", extfn->method->name.name.c_str());     
+            return nullptr;
+        } 
+        else if (minst->is<P4::BuiltInMethod>()) {
+            auto bi = minst->to<P4::BuiltInMethod>();
+            std::cout << "name = " << bi->name <<"\n";
+            if (bi->name == IR::Type_Header::isValid) {
+                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), backend->Builder.getInt1Ty());
+                return backend->Builder.CreateCall(decl);
+            } 
+            else if (bi->name == IR::Type_Header::setValid || bi->name == IR::Type_Header::setInvalid) {
+                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), backend->Builder.getVoidTy());
+                return backend->Builder.CreateCall(decl);
+            } 
+            else if (bi->name == IR::Type_Stack::push_front || bi->name == IR::Type_Stack::pop_front) {
+                std::vector<Type*> args;
+                args.push_back(backend->Builder.getInt32Ty());
+                FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
+                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
+
+                BUG_CHECK(mce->arguments->size() == 1, "Expected 1 argument for %1%", mce);
+                
+                std::cout << "calling processexp from builtin meth of convert parser stmt:1\n";                                    
+                llvmValue = processExpression(mce->arguments->at(0), nullptr, nullptr, true);
+                assert(llvmValue != nullptr && "processExpression should not return null");
+                auto tmp = llvmValue; llvmValue = nullptr;       
+                return backend->Builder.CreateCall(decl, tmp);
+            } 
+            else {
+                BUG("%1%: Unexpected built-in method", bi->name);
+            }
+            return nullptr;
         }
     }
     
@@ -391,29 +503,26 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
 }
 
 bool ToIR::preorder(const IR::Declaration_Variable* t) {
-    auto type = backend->getCorrespondingType(typemap->getType(t));
+    auto type = backend->getCorrespondingType(t->type);
     Value *alloca = backend->Builder.CreateAlloca(type);
     backend->st.insert("alloca_"+t->getName(),alloca);       
     return false;
 }
 
 bool ToIR::preorder(const IR::AssignmentStatement* t) {
+    std::cout << "caught in assignment stmt -- " << *t;
     Value* leftValue = processExpression(t->left, nullptr, nullptr, true);
     assert(leftValue != nullptr && "left expression in assignment can't be null");
     Type* llvmType = leftValue->getType();          
     Value* right = processExpression(t->right);
     if(right != nullptr)    {
-        std::cout << "in assignment stmt -- right\nleft val -- ";
-        // leftValue->dump();
-        std::cout<<"right val--\n";
-        // right->dump();
-        if(((PointerType*)llvmType)->getElementType()->isVectorTy())    {
-            std::cout << "im vector type\n";
+        auto eleTy = ((PointerType*)llvmType)->getElementType();
+        if(eleTy->isVectorTy())    {
             // ((PointerType*)llvmType)->getElementType()->dump();
             right = backend->Builder.CreateBitCast(right, ((PointerType*)llvmType)->getElementType());
         }
-        else if(((PointerType*)llvmType)->getElementType ()->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())
-            right = backend->Builder.CreateZExt(right, llvmType);
+        else if(eleTy->isIntegerTy() && (eleTy->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())) 
+            right = backend->Builder.CreateZExt(right, ((PointerType*)llvmType)->getElementType());
         backend->Builder.CreateStore(right,leftValue);           
     }
     else {
@@ -459,123 +568,9 @@ bool ToIR::preorder(const IR::AssignmentStatement* t) {
 
 bool ToIR::preorder(const IR::MethodCallStatement* stat) {
     auto mce = stat->to<IR::MethodCallStatement>()->methodCall;
-    auto minst = P4::MethodInstance::resolve(mce, refmap, typemap);
-    if (minst->is<P4::ExternMethod>()) {
-        auto extmeth = minst->to<P4::ExternMethod>();
-        if (extmeth->method->name.name == corelib.packetIn.extract.name) {
-            int argCount = mce->arguments->size();
-            if (argCount == 1 || argCount == 2) {
-                auto arg = mce->arguments->at(0);
-                auto argtype = typemap->getType(arg, true);
-                if (!argtype->is<IR::Type_Header>()) {
-                    ::error("%1%: extract only accepts arguments with header types, not %2%",
-                            arg, argtype);
-                    return false;
-                }
-                
-                if (argCount == 1) {
-                    std::cout << "calling processexp from mcs of convert parser stmt: ac=1\n";
-                    createExternFunction(1,mce,extmeth->method->name.name);
-                    return false;                      
-                }
-                // if (arg->is<IR::Member>()) {
-                //     auto mem = arg->to<IR::Member>();
-                //     auto baseType = typemap->getType(mem->expr, true);
-                //     if (baseType->is<IR::Type_Stack>()) {
-                //         if (mem->member == IR::Type_Stack::next) {
-                //             type = "stack";
-                //             j = conv->convert(mem->expr);
-                //         } else {
-                //             BUG("%1%: unsupported", mem);
-                //         }
-                //     }
-                // }
-
-                if (argCount == 2) {
-                    createExternFunction(2,mce,extmeth->method->name.name);
-                    return false;
-                }                   
-            }
-        }
-        BUG("%1%: Unexpected extern method", extmeth->method->name.name);            
-    } 
-    else if (minst->is<P4::ExternFunction>()) {
-        auto extfn = minst->to<P4::ExternFunction>();
-        if (extfn->method->name.name == IR::ParserState::verify ||
-                extfn->method->name == v1model.clone.name ||
-                extfn->method->name == v1model.digest_receiver.name) {           
-            BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
-            createExternFunction(2,mce,extfn->method->name);
-            return false;
-        }
-
-        if (extfn->method->name == v1model.clone.clone3.name ||
-                extfn->method->name == v1model.random.name) {
-            BUG_CHECK(mce->arguments->size() == 3, "%1%: Expected 3 arguments", mce);
-            createExternFunction(3,mce,extfn->method->name);
-            return false;         
-        }
-        if (extfn->method->name == v1model.hash.name) {
-            BUG_CHECK(mce->arguments->size() == 5, "%1%: Expected 5 arguments", mce);                
-            static std::set<cstring> supportedHashAlgorithms = {
-                v1model.algorithm.crc32.name, v1model.algorithm.crc32_custom.name,
-                v1model.algorithm.crc16.name, v1model.algorithm.crc16_custom.name,
-                v1model.algorithm.random.name, v1model.algorithm.identity.name,
-                v1model.algorithm.csum16.name, v1model.algorithm.xor16.name
-            };
-
-            auto ei = P4::EnumInstance::resolve(mce->arguments->at(1), typemap);
-            CHECK_NULL(ei);
-            if (supportedHashAlgorithms.find(ei->name) == supportedHashAlgorithms.end()) {
-                ::error("%1%: unexpected algorithm", ei->name);
-                return false;
-            }
-            createExternFunction(5,mce,extfn->method->name);
-            return false;          
-        }
-        if (extfn->method->name == v1model.resubmit.name ||
-               extfn->method->name == v1model.recirculate.name ||
-               extfn->method->name == v1model.truncate.name) {
-            BUG_CHECK(mce->arguments->size() == 1, "%1%: Expected 1 argument", mce);                
-            createExternFunction(1,mce,extfn->method->name);
-            return false; 
-        }
-        if (extfn->method->name == v1model.drop.name) {
-            BUG_CHECK(mce->arguments->size() == 0, "%1%: Expected 0 arguments", mce);                
-            createExternFunction(0,mce,extfn->method->name);
-            return false; 
-        }
-
-        BUG("%1%: Unexpected extern function", extfn->method->name.name.c_str());     
-        return false;
-    } 
-    else if (minst->is<P4::BuiltInMethod>()) {
-        auto bi = minst->to<P4::BuiltInMethod>();
-        if (bi->name == IR::Type_Header::setValid || bi->name == IR::Type_Header::setInvalid) {
-            auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), backend->Builder.getVoidTy());
-            backend->Builder.CreateCall(decl);
-        } 
-        else if (bi->name == IR::Type_Stack::push_front || bi->name == IR::Type_Stack::pop_front) {
-            std::vector<Type*> args;
-            args.push_back(backend->Builder.getInt32Ty());
-            FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
-            auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
-
-            BUG_CHECK(mce->arguments->size() == 1, "Expected 1 argument for %1%", mce);
-            
-            std::cout << "calling processexp from builtin meth of convert parser stmt:1\n";                                    
-            llvmValue = processExpression(mce->arguments->at(0), nullptr, nullptr, true);
-            assert(llvmValue != nullptr && "processExpression should not return null");
-            backend->Builder.CreateCall(decl, llvmValue);
-            llvmValue = nullptr;
-            
-        } 
-        else {
-            BUG("%1%: Unexpected built-in method", bi->name);
-        }
-        return false;
-    }
-    std::cout << "----------------------unhandled mcs---------------------------------------\n";
+    llvmValue = processExpression(mce);
+    assert(llvmValue != nullptr);
+    llvmValue = nullptr;
     return false;
 }
 
