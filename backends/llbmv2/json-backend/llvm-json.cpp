@@ -3,6 +3,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -11,8 +12,10 @@
 // #include "../helpers.h"
 #include "lib/json.h"
 #include "emitHeader.h"
+#include "emitParser.h"
 #include <fstream>
 #include <iostream>
+#include "helpers.h"
 
 using namespace llvm;
 
@@ -24,28 +27,29 @@ public:
     static char ID;
 	JsonBackend() : ModulePass(ID) {
 		json = new LLBMV2::JsonObjects();
+		pc = new LLBMV2::ParserConverter(json);
 	}
 
 	virtual bool runOnModule(Module &M) {
 		// initialize json objects
 		populateJsonObjects(M);
 		populateStruct2Type(M.getIdentifiedStructTypes(),
-												M.getNamedMetadata("header"),
-												M.getNamedMetadata("struct"),
-												M.getNamedMetadata("header_union"));
-		emitHeaders(M);
+							M.getNamedMetadata("header"),
+							M.getNamedMetadata("struct"),
+							M.getNamedMetadata("header_union"));
+		emitLocalVariables(M);
 		// Iterate on functions
 		for (auto fun = M.begin(); fun != M.end(); fun++) {
 			errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
-			runOnFunction(&*fun);
+			emitHeaders(&*fun);
 		}
+		emitParser(M);
 		printJsonToFile(M.getSourceFileName()+".ll.json");
 		return false;
 	}
-	bool runOnFunction(Function *F);
-	void emitHeaders(Module &M);
-	void emitHeaderTypes(std::vector<StructType *>&, NamedMDNode *);
-	void emitStructTypes(std::vector<StructType *>&, NamedMDNode *);
+	bool emitHeaders(Function *F);
+	void emitLocalVariables(Module &M);
+	void emitParser(Module &M);
 
 private:
 		Util::JsonObject jsonTop;
@@ -64,6 +68,7 @@ private:
 								NamedMDNode *struct_md,
 								NamedMDNode *header_union_md);
 		LLBMV2::ConvertHeaders ch;
+		LLBMV2::ParserConverter *pc;
 		void printJsonToFile(const std::string fn);
 		std::map<llvm::StructType*, std::string> *struct2Type;
 };
@@ -71,7 +76,15 @@ private:
 
 char JsonBackend::ID = 0;
 
-void JsonBackend::emitHeaders(Module &M) {
+void JsonBackend::emitParser(Module &M) {
+	for (auto fn = M.begin(); fn != M.end(); fn++) {
+		if ((&*fn)->getAttributes().getFnAttributes().hasAttribute("parser")) {
+			pc->processParser((&*fn));
+		}
+	}
+}
+
+void JsonBackend::emitLocalVariables(Module &M) {
 	// Collect local variable.
 	// A local varible is the instance that is not from parameters list
 	// Finds all the allocas that are not of function paramerter
@@ -135,7 +148,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString()))
 			{
-				errs() << st->getName() << " is of header_unionb type\n";
+				errs() << st->getName() << " is of header_union type\n";
 				(*struct2Type)[st] = "header_union";
 				found = true;
 				break;
@@ -154,19 +167,6 @@ void JsonBackend::printJsonToFile(const std::string filename)
 	errs() << "printed json to : " << filename << "\n";
 }
 
-Util::JsonArray *mkArrayField(Util::JsonObject *parent, cstring name)
-{
-	auto result = new Util::JsonArray();
-	parent->emplace(name, result);
-	return result;
-}
-
-unsigned nextId(cstring group)
-{
-	static std::map<cstring, unsigned> counters;
-	return counters[group]++;
-}
-
 void JsonBackend::populateJsonObjects(Module &M)
 {
 	jsonTop.emplace("program", M.getName());
@@ -177,32 +177,32 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("header_union_types", json->header_union_types);
 	jsonTop.emplace("header_unions", json->header_unions);
 	jsonTop.emplace("header_union_stacks", json->header_union_stacks);
-	field_lists = mkArrayField(&jsonTop, "field_lists");
+	field_lists = LLBMV2::mkArrayField(&jsonTop, "field_lists");
 	jsonTop.emplace("errors", json->errors);
 	jsonTop.emplace("enums", json->enums);
 	jsonTop.emplace("parsers", json->parsers);
 	jsonTop.emplace("deparsers", json->deparsers);
-	meter_arrays = mkArrayField(&jsonTop, "meter_arrays");
-	counters = mkArrayField(&jsonTop, "counter_arrays");
-	register_arrays = mkArrayField(&jsonTop, "register_arrays");
+	meter_arrays = LLBMV2::mkArrayField(&jsonTop, "meter_arrays");
+	counters = LLBMV2::mkArrayField(&jsonTop, "counter_arrays");
+	register_arrays = LLBMV2::mkArrayField(&jsonTop, "register_arrays");
 	jsonTop.emplace("calculations", json->calculations);
-	learn_lists = mkArrayField(&jsonTop, "learn_lists");
-	nextId("learn_lists");
+	learn_lists = LLBMV2::mkArrayField(&jsonTop, "learn_lists");
+	LLBMV2::nextId("learn_lists");
 	jsonTop.emplace("actions", json->actions);
 	jsonTop.emplace("pipelines", json->pipelines);
 	jsonTop.emplace("checksums", json->checksums);
-	force_arith = mkArrayField(&jsonTop, "force_arith");
+	force_arith = LLBMV2::mkArrayField(&jsonTop, "force_arith");
 	jsonTop.emplace("extern_instances", json->externs);
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
 
-bool JsonBackend::runOnFunction(Function *F) {
+bool JsonBackend::emitHeaders(Function *F) {
 	// Get function arguments
 	// Emit headers recursively for each argument
 	if(F->getAttributes().getFnAttributes().hasAttribute("parser")) {
 		errs() << "Found parser function\n";
 		for(auto param = F->arg_begin(); param != F->arg_end(); param++) {
-			auto st = dyn_cast<StructType>((&*param)->getType());
+			auto st = dyn_cast<StructType>(dyn_cast<PointerType>((&*param)->getType())->getElementType());
 			if (st != nullptr && (*struct2Type)[st] == "struct")
 			{
 				errs() << "Calling parser function\n";
