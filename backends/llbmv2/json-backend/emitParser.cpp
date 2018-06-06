@@ -20,6 +20,8 @@ limitations under the License.
 #include "helpers.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/InstrTypes.h"
+#include <bits/stdc++.h>
 
 using namespace llvm;
 namespace LLBMV2 {
@@ -81,6 +83,62 @@ std::string ParserConverter::getFieldName(Value* arg) {
         errs() << "No of operands in load : " << ld->getNumOperands() << "\n";
         return getFieldName(ld->getOperand(0));
     }
+
+    if(auto bc = dyn_cast<BitCastInst>(arg)) {
+        errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
+        return getFieldName(bc->getOperand(0));
+    }
+}
+
+// cstring ParserConverter::getBinaryOperation(BinaryOperator *inst) {
+//     return inst->getOpcodeName();
+// }
+
+Util::IJson* ParserConverter::getJsonExp(Value *inst) {
+    auto result = new Util::JsonObject();
+    if(auto bo = dyn_cast<BinaryOperator>(inst)) {
+        // cstring op = getBinaryOperation(bo);
+        cstring op = bo->getOpcodeName();
+        result->emplace("op", op);
+        auto left = getJsonExp(bo->getOperand(0));
+        auto right = getJsonExp(bo->getOperand(1));
+        result->emplace("left", left);
+        result->emplace("right", right);
+        // auto fin = new Util::JsonObject();
+        assert(inst->getType()->isIntegerTy() && "should be an integer type");
+        unsigned bw = inst->getType()->getIntegerBitWidth();
+        auto result_ex = new Util::JsonObject();
+        result_ex->emplace("type", "expression");
+        result_ex->emplace("value", result);
+        std::stringstream stream;
+        stream << std::hex << (std::pow(2, bw)-1);
+        auto trunc = new Util::JsonObject();
+        trunc->emplace("left", result_ex);
+        auto trunc_val = new Util::JsonObject();
+        trunc_val->emplace("hexstr", stream.str().c_str());
+        trunc->emplace("right", trunc_val);
+        trunc->emplace("op", "&");
+        auto trunc_exp = new Util::JsonObject();
+        trunc_exp->emplace("type", "expression");
+        trunc_exp->emplace("value", trunc);
+        return trunc_exp;
+    }
+    else if(auto cnst = dyn_cast<ConstantInt>(inst)) {
+        std::stringstream stream;
+        stream << std::hex << cnst->getSExtValue();
+        result->emplace("hexstr", stream.str().c_str());
+        return result;
+    }
+    else if (auto ld = dyn_cast<LoadInst>(inst)) {
+        std::string headername = getFieldName(ld->getOperand(0)).substr(1);
+        result->emplace("field", headername.c_str());
+        return result;
+    }
+    else {
+        errs() << *inst << "\n" << "Unhandled instrution in getJsonExp\n";
+        assert(false);
+        return result;
+    }
 }
 
 // TODO(hanw) refactor this function
@@ -88,12 +146,15 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
     auto result = new Util::JsonObject();
     auto params = mkArrayField(result, "parameters");
     if (isa<StoreInst>(inst)) {
-        assert(false && "This is a store inst");
-    //     auto assign = dyn_cast<StoreInst>(inst);
-    //     // auto type = typeMap->getType(assign->left, true);
-    //     // cstring operation = Backend::jsonAssignment(type, true);
-    //     cstring operation;
-    //     result->emplace("op", operation);
+        auto assign = dyn_cast<StoreInst>(inst);
+        cstring operation = "set";
+        std::string left_field = getFieldName(assign->getOperand(1)).substr(1);
+        auto right = getJsonExp(assign->getOperand(0));
+        if(dyn_cast<PointerType>(assign->getOperand(1)->getType())->getElementType()->isStructTy())
+            operation = "assign_header";
+        result->emplace("op", operation);
+        params->append((new Util::JsonObject())->emplace("field", left_field));
+        params->append(right);
     //     auto l = conv->convertLeftValue(assign->left);
     //     bool convertBool = type->is<IR::Type_Boolean>();
     //     auto r = conv->convert(assign->right, true, true, convertBool);
@@ -115,10 +176,12 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
         auto mce = dyn_cast<CallInst>(inst);
         // auto minst = P4::MethodInstance::resolve(mce, refMap, typeMap);
         auto minst = mce->getCalledFunction()->getName();
+        int argCount = mce->getFunctionType()->getFunctionNumParams();
         if (minst.contains("extract")) {
             // auto extmeth = minst->to<P4::ExternMethod>();
             // if (extmeth->method->name.name == corelib.packetIn.extract.name) {
-            int argCount = mce->getFunctionType()->getFunctionNumParams();
+            assert(argCount == 1 && 
+                "Two argument in extract function, need to convert to one argument. Do it when it hits");
             if (argCount == 1 || argCount == 2) {
                 cstring ename = argCount == 1 ? "extract" : "extract_VL";
                 result->emplace("op", ename);
@@ -172,28 +235,64 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
                 // }
                 return result;
             }
-        }// else if (minst->is<P4::ExternFunction>()) {
-        //     auto extfn = minst->to<P4::ExternFunction>();
-        //     if (extfn->method->name.name == IR::ParserState::verify) {
-        //         result->emplace("op", "verify");
-        //         BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
-        //         {
-        //             auto cond = mce->arguments->at(0);
-        //             // false means don't wrap in an outer expression object, which is not needed
-        //             // here
-        //             auto jexpr = conv->convert(cond->expression, true, false);
-        //             params->append(jexpr);
-        //         }
-        //         {
-        //             auto error = mce->arguments->at(1);
-        //             // false means don't wrap in an outer expression object, which is not needed
-        //             // here
-        //             auto jexpr = conv->convert(error->expression, true, false);
-        //             params->append(jexpr);
-        //         }
-        //         return result;
-        //     }
-        // } else if (minst->is<P4::BuiltInMethod>()) {
+        } else if (minst.contains("verify")) {
+            assert(false && "verify is not handled, errors need fixing in frontend");
+            // auto extfn = minst->to<P4::ExternFunction>();
+            // if (extfn->method->name.name == IR::ParserState::verify) {
+            // result->emplace("op", "verify");
+            // BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
+            // if(argCount != 2) {
+            //     errs() << "ERROR : Expected 2 arguments in verify function\n";
+            //     exit(1); 
+            // }
+            // {
+            //     auto cond = mce->arguments->at(0);
+            //     // false means don't wrap in an outer expression object, which is not needed
+            //     // here
+            //     auto jexpr = conv->convert(cond->expression, true, false);
+            //     params->append(jexpr);
+            // }
+            // {
+            //     auto error = mce->arguments->at(1);
+            //     // false means don't wrap in an outer expression object, which is not needed
+            //     // here
+            //     auto jexpr = conv->convert(error->expression, true, false);
+            //     params->append(jexpr);
+            // }
+            return result;
+            // }
+        } else if(minst.contains("setValid") || minst.contains("setInvalid")) {
+            result->emplace("op", "primitive");
+            auto paramsValue = new Util::JsonObject();
+            params->append(paramsValue);
+            auto pp = mkArrayField(paramsValue, "parameters");
+            assert(argCount == 1 && "setValid/setInvalid function should have one argument");
+            cstring primitive;
+            if(minst.contains("setValid"))
+                primitive = "add_header";
+            else if(minst.contains("setInValid"))
+                primitive = "remove_header";
+            else
+                assert(false && "This should not happen");
+
+            auto argtype = mce->getFunctionType()->getFunctionParamType(0);
+            // Ideally, the condtion checks whether arg is of header type,
+            // At this point it should be sure that argtype will be Type_header
+            if (!argtype->isStructTy()) {
+                // ::error("%1%: extract only accepts arguments with header types, not %2%",
+                //         arg, argtype);
+                errs() << "extract only accepts arguments with header types, not : "
+                       << argtype->getTypeID() << "\n";
+                exit(1);
+                return result;
+            }
+            auto obj = new Util::JsonObject();
+            pp->append(obj->emplace("type", "header"));
+            pp->append(obj->emplace("value", getFieldName(inst->getOperand(0)).substr(1).c_str()));
+            paramsValue->emplace("op", primitive);
+            return result;
+        } 
+        // else if (minst->is<P4::BuiltInMethod>()) {
         //     /* example result:
         //      {
         //         "parameters" : [
@@ -238,7 +337,7 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
         // }
     }
     // ::error("%1%: not supported in parser on this target", stat);
-    errs() << "ERROR : This type is not supported in parser\n";
+    errs() << "ERROR : This type is not supported in parser\n" << *inst <<"\n";
     exit(1);
     return result;
 }
