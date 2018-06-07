@@ -1,30 +1,42 @@
 #include "toIR.h"
 
-Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name)   {
+Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name, MethodInstance* minst)   {
     std::vector<Type*> args;
     std::vector<Value*> param;
-    
+
+    auto params = minst->getOriginalParameters()->parameters;
+
     for(int i=0; i<no; i++){
         if(auto inst = mce->arguments->at(i)->to<IR::ListExpression>())   {
             std::cout << "caught list exp\n";
             for(auto c : inst->components) {
                 std::cout << "processing - " << c<<"\n";
-                llvmValue = processExpression(c);
-                args.push_back(PointerType::get(llvmValue->getType(), 0));
+                if(params.at(i)->hasOut())
+                    llvmValue = processExpression(c,nullptr,nullptr,true);
+                else
+                    llvmValue = processExpression(c);
                 assert(llvmValue != nullptr && "processExpression should not return null");
+                args.push_back(llvmValue->getType());
                 param.push_back(llvmValue);
                 llvmValue = nullptr;
             }
         }
         else {
-            llvmValue = processExpression(mce->arguments->at(i));
-            args.push_back(llvmValue->getType());
+            if(params.at(i)->hasOut())
+                llvmValue = processExpression(mce->arguments->at(i),nullptr,nullptr,true);
+            else
+                llvmValue = processExpression(mce->arguments->at(i));
             assert(llvmValue != nullptr && "processExpression should not return null");
+            args.push_back(llvmValue->getType());
             param.push_back(llvmValue);
             llvmValue = nullptr;
         } 
     }
-
+    //for(auto x:args)
+        //x->dump();
+    //std::cout << "--\n";
+    //for(auto y:param)
+        //y->getType()->dump();
     FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
     Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
     return backend->Builder.CreateCall(decl, param);
@@ -102,7 +114,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 }
             }
             Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
-            //ex->dump();
+            // ex->dump();
             MYDEBUG(std::cout << e->to<IR::Member>()->member.name << std::endl;)
             int ext_i = backend->structIndexMap[((PointerType *)ex->getType())->getElementType()][std::string(e->to<IR::Member>()->member.name)];
             MYDEBUG(std::cout << "processed expression inside member, retrieved from backend->structIndexMap as - " << ext_i << std::endl;)
@@ -127,8 +139,8 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             if (required_alloca) 
                 return ex;
             else {
-                // backend->Builder.CreateLoad(ex)->dump();
-                return backend->Builder.CreateLoad(ex);
+                //backend->Builder.CreateLoad(ex)->dump();
+		return backend->Builder.CreateLoad(ex);
             }
         }
         else
@@ -322,7 +334,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             std::cout <<"left -- ";
             // left->dump();
             // left->getType()->dump();
-            std::cout <<"right -- ";
+            //std::cout <<"right -- ";
             // right->dump();
             // right->getType()->dump();
             
@@ -395,10 +407,10 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                                 arg, argtype);
                         return nullptr;
                     }
-                    
+       
                     if (argCount == 1) {
                         std::cout << "calling processexp from mcs of convert parser stmt: ac=1\n";
-                        return createExternFunction(1,mce,extmeth->method->name.name);                      
+                        return createExternFunction(1,mce,extmeth->method->name.name,minst);                      
                     }
                     // if (arg->is<IR::Member>()) {
                     //     auto mem = arg->to<IR::Member>();
@@ -414,7 +426,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                     // }
 
                     if (argCount == 2) {
-                        createExternFunction(2,mce,extmeth->method->name.name);
+                        createExternFunction(2,mce,extmeth->method->name.name,minst);
                         return nullptr;
                     }                   
                 }
@@ -427,13 +439,13 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                     extfn->method->name == v1model.clone.name ||
                     extfn->method->name == v1model.digest_receiver.name) {           
                 BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
-                return createExternFunction(2,mce,extfn->method->name);
+                return createExternFunction(2,mce,extfn->method->name,minst);
             }
 
             if (extfn->method->name == v1model.clone.clone3.name ||
                     extfn->method->name == v1model.random.name) {
                 BUG_CHECK(mce->arguments->size() == 3, "%1%: Expected 3 arguments", mce);
-                return createExternFunction(3,mce,extfn->method->name);        
+                return createExternFunction(3,mce,extfn->method->name,minst);        
             }
             if (extfn->method->name == v1model.hash.name) {
                 BUG_CHECK(mce->arguments->size() == 5, "%1%: Expected 5 arguments", mce);                
@@ -450,17 +462,17 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                     ::error("%1%: unexpected algorithm", ei->name);
                     return nullptr;
                 }
-                return createExternFunction(5,mce,extfn->method->name);          
+                return createExternFunction(5,mce,extfn->method->name,minst);          
             }
             if (extfn->method->name == v1model.resubmit.name ||
                 extfn->method->name == v1model.recirculate.name ||
                 extfn->method->name == v1model.truncate.name) {
                 BUG_CHECK(mce->arguments->size() == 1, "%1%: Expected 1 argument", mce);                
-                return createExternFunction(1,mce,extfn->method->name);
+                return createExternFunction(1,mce,extfn->method->name,minst);
             }
             if (extfn->method->name == v1model.drop.name) {
                 BUG_CHECK(mce->arguments->size() == 0, "%1%: Expected 0 arguments", mce);                
-                return createExternFunction(0,mce,extfn->method->name);
+                return createExternFunction(0,mce,extfn->method->name,minst);
             }
 
             BUG("%1%: Unexpected extern function", extfn->method->name.name.c_str());     
@@ -470,12 +482,24 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             auto bi = minst->to<P4::BuiltInMethod>();
             std::cout << "name = " << bi->name <<"\n";
             if (bi->name == IR::Type_Header::isValid) {
-                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), backend->Builder.getInt1Ty());
-                return backend->Builder.CreateCall(decl);
+                auto val = processExpression(bi->appliedTo,nullptr,nullptr,true);
+                std::vector<Type*> args;
+                args.push_back(val->getType());
+                std::vector<Value*> params;
+                params.push_back(val);
+                FunctionType *FT = FunctionType::get(backend->Builder.getInt1Ty(), args, false);                
+                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
+                return backend->Builder.CreateCall(decl,params);
             } 
             else if (bi->name == IR::Type_Header::setValid || bi->name == IR::Type_Header::setInvalid) {
-                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), backend->Builder.getVoidTy());
-                return backend->Builder.CreateCall(decl);
+                auto val = processExpression(bi->appliedTo,nullptr,nullptr,true);
+                std::vector<Type*> args;
+                args.push_back(val->getType());
+                std::vector<Value*> params;
+                params.push_back(val);
+                FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);                
+                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
+                return backend->Builder.CreateCall(decl,params);
             } 
             else if (bi->name == IR::Type_Stack::push_front || bi->name == IR::Type_Stack::pop_front) {
                 std::vector<Type*> args;
@@ -496,9 +520,13 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             }
             return nullptr;
         }
+        else if(auto tbl = minst->to<P4::ApplyMethod>()) {
+            if(tbl->isTableApply())
+                convertTable(tbl->object->to<IR::P4Table>());            
+        }
     }
     
-    ::error("Returning nullptr in processExpression");        
+    // ::error("Returning nullptr in processExpression");        
     return nullptr;
 }
 
@@ -569,7 +597,7 @@ bool ToIR::preorder(const IR::AssignmentStatement* t) {
 bool ToIR::preorder(const IR::MethodCallStatement* stat) {
     auto mce = stat->to<IR::MethodCallStatement>()->methodCall;
     llvmValue = processExpression(mce);
-    assert(llvmValue != nullptr);
+    // assert(llvmValue != nullptr);
     llvmValue = nullptr;
     return false;
 }
@@ -578,4 +606,454 @@ bool ToIR::preorder(const IR::BlockStatement* b) {
     for(auto c : b->components)      
         visit(c);
     return false;
+}
+
+Value* ToIR::createTableFunction(int no, const IR::ConstructorCallExpression* mce, cstring name)   {
+    std::vector<Type*> args;
+    std::vector<Value*> param;
+    
+    for(int i=0; i<no; i++){
+        if(auto inst = mce->arguments->at(i)->to<IR::ListExpression>())   {
+            std::cout << "caught list exp\n";
+            for(auto c : inst->components) {
+                std::cout << "processing - " << c<<"\n";
+                auto llvmValue = processExpression(c);
+                assert(llvmValue != nullptr && "processExpression should not return null");
+                args.push_back(llvmValue->getType());
+                param.push_back(llvmValue);
+                llvmValue = nullptr;
+            }
+        }
+        else {
+            auto llvmValue = processExpression(mce->arguments->at(i));
+            assert(llvmValue != nullptr && "processExpression should not return null");
+            args.push_back(llvmValue->getType());
+            param.push_back(llvmValue);
+            llvmValue = nullptr;
+        } 
+    }
+    // for(auto x:args)
+    //     x->dump();
+    // std::cout << "--\n";
+    // for(auto y:param)
+    //     y->getType()->dump();
+    
+    FunctionType *FT = FunctionType::get(backend->Builder.getInt8PtrTy(), args, false);
+    auto decl = backend->TheModule->getOrInsertFunction(name.c_str(), FT);
+    // Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
+    return backend->Builder.CreateCall(decl, param);
+}
+
+void ToIR::convertTableEntries(const IR::P4Table *table, Instruction* apply) {
+    auto entriesList = table->getEntries();
+    if (entriesList == nullptr) return;
+
+    int entryPriority = 1;  // default priority is defined by index position
+    SmallVector<Metadata*, 8> keyMDV;
+    SmallVector<Metadata*, 8> actionMDV;
+    SmallVector<Metadata*, 8> priorityMDV;    
+    
+    for (auto e : entriesList->entries) {
+        // TODO(jafingerhut) - add line/col here?
+        auto keyset = e->getKeys();
+        int keyIndex = 0;
+
+        for (auto k : keyset->components) {
+            auto tableKey = table->getKey()->keyElements.at(keyIndex);
+            auto keyWidth = tableKey->expression->type->width_bits();
+            auto k8 = ROUNDUP(keyWidth, 8);
+            auto matchType = getKeyMatchType(tableKey);
+            if (matchType == backend->getCoreLibrary().exactMatch.name) {
+                if (k->is<IR::Constant>()){
+                    keyMDV.push_back(MDString::get(backend->TheContext, stringRepr(k->to<IR::Constant>()->value, k8).c_str()));                
+                }
+                else if (k->is<IR::BoolLiteral>()) {
+                    // booleans are converted to ints
+                    keyMDV.push_back(MDString::get(backend->TheContext, stringRepr(k->to<IR::BoolLiteral>()->value ? 1 : 0, k8).c_str()));                                    
+                }
+                else
+                    ::error("%1% unsupported exact key expression", k);
+            } else if (matchType == backend->getCoreLibrary().ternaryMatch.name) {
+                SmallVector<Metadata*, 8> tupleMDV;                
+                if (k->is<IR::Mask>()) {
+                    auto km = k->to<IR::Mask>();
+                    tupleMDV.push_back(MDString::get(backend->TheContext, stringRepr(km->left->to<IR::Constant>()->value, k8).c_str()));
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(km->right->to<IR::Constant>()->value, k8).c_str()));
+                } else if (k->is<IR::Constant>()) {
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(k->to<IR::Constant>()->value, k8).c_str()));
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(Util::mask(keyWidth), k8).c_str()));                    
+                } else if (k->is<IR::DefaultExpression>()) {
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(0, k8).c_str()));
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(0, k8).c_str()));                    
+                } else {
+                    ::error("%1% unsupported ternary key expression", k);
+                }
+                keyMDV.push_back(MDTuple::get(backend->TheContext, tupleMDV));
+            } else if (matchType == backend->getCoreLibrary().lpmMatch.name) {
+                SmallVector<Metadata*, 8> tupleMDV;                                
+                if (k->is<IR::Mask>()) {
+                    auto km = k->to<IR::Mask>();
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(km->left->to<IR::Constant>()->value, k8).c_str()));
+                    
+                    auto trailing_zeros = [](unsigned long n) { return n ? __builtin_ctzl(n) : 0; };
+                    auto count_ones = [](unsigned long n) { return n ? __builtin_popcountl(n) : 0;};
+                    unsigned long mask = km->right->to<IR::Constant>()->value.get_ui();
+                    auto len = trailing_zeros(mask);
+                    if (len + count_ones(mask) != keyWidth)  // any remaining 0s in the prefix?
+                        ::error("%1% invalid mask for LPM key", k);
+                    else {
+                        tupleMDV.push_back(MDString::get(backend->TheContext,std::to_string(keyWidth - len)));
+                    }
+                } else if (k->is<IR::Constant>()) {
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(k->to<IR::Constant>()->value, k8).c_str()));                    
+                    tupleMDV.push_back(MDString::get(backend->TheContext,std::to_string(keyWidth)));                    
+                } else if (k->is<IR::DefaultExpression>()) {
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(0, k8).c_str()));                                        
+                    tupleMDV.push_back(MDString::get(backend->TheContext,0));                                        
+                } else {
+                    ::error("%1% unsupported LPM key expression", k);
+                }
+                keyMDV.push_back(MDTuple::get(backend->TheContext, tupleMDV));                
+            } else if (matchType == "range") {
+                SmallVector<Metadata*, 8> tupleMDV;                                                
+                if (k->is<IR::Range>()) {
+                    auto kr = k->to<IR::Range>();
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(kr->left->to<IR::Constant>()->value, k8).c_str()));                                        
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(kr->right->to<IR::Constant>()->value, k8).c_str()));                                        
+                } else if (k->is<IR::DefaultExpression>()) {
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(0, k8).c_str()));                                                            
+                    tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr((1 << keyWidth)-1, k8).c_str()));                                                            
+                } else {
+                    ::error("%1% invalid range key expression", k);
+                }
+                keyMDV.push_back(MDTuple::get(backend->TheContext, tupleMDV)); 
+            } else {
+                ::error("unkown key match type '%1%' for key %2%", matchType, k);
+            }
+            keyIndex++;
+        }
+                                      
+
+        auto actionRef = e->getAction();
+        if (!actionRef->is<IR::MethodCallExpression>())
+            ::error("%1%: invalid action in entries list", actionRef);
+        auto actionCall = actionRef->to<IR::MethodCallExpression>();
+       
+        actionMDV.push_back(MDString::get(backend->TheContext, actionCall->toString()));
+        SmallVector<Metadata*, 8> tupleMDV;                                        
+        for (auto arg : *actionCall->arguments) {
+            tupleMDV.push_back(MDString::get(backend->TheContext,stringRepr(arg->to<IR::Constant>()->value, 0)));                                
+        }
+
+        auto priorityAnnotation = e->getAnnotation("priority");
+        if (priorityAnnotation != nullptr) {
+            if (priorityAnnotation->expr.size() > 1)
+                ::error("invalid priority value %1%", priorityAnnotation->expr);
+            auto priValue = priorityAnnotation->expr.front();
+            if (!priValue->is<IR::Constant>())
+                ::error("invalid priority value %1%. must be constant", priorityAnnotation->expr);
+            priorityMDV.push_back(MDString::get(backend->TheContext, std::to_string(priValue->to<IR::Constant>()->value.get_si())));            
+        } else {
+            priorityMDV.push_back(MDString::get(backend->TheContext, std::to_string(entryPriority)));
+        }
+        entryPriority += 1;
+    }
+    MDNode* keysMD = MDNode::get(backend->TheContext, keyMDV);                        
+    apply->setMetadata("key",keysMD); 
+
+    MDNode* actionMD = MDNode::get(backend->TheContext, actionMDV);                        
+    apply->setMetadata("action",actionMD);
+
+    MDNode* priorityMD = MDNode::get(backend->TheContext, priorityMDV);                        
+    apply->setMetadata("priority",priorityMD);
+}
+
+
+cstring ToIR::getKeyMatchType(const IR::KeyElement *ke) {
+    auto path = ke->matchType->path;
+    auto mt = refmap->getDeclaration(path, true)->to<IR::Declaration_ID>();
+    BUG_CHECK(mt != nullptr, "%1%: could not find declaration", ke->matchType);
+
+    if (mt->name.name == backend->getCoreLibrary().exactMatch.name ||
+        mt->name.name == backend->getCoreLibrary().ternaryMatch.name ||
+        mt->name.name == backend->getCoreLibrary().lpmMatch.name ||
+        backend->getModel().find_match_kind(mt->name.name)) {
+        return mt->name.name;
+    }
+
+    ::error("%1%: match type not supported on this target", mt);
+    return "invalid";
+}
+
+Value* ToIR::handleTableImplementation(const IR::Property* implementation) {
+    if (implementation == nullptr) {
+        SmallVector<Type*,1> args;
+        FunctionType *FT = FunctionType::get(backend->Builder.getInt8PtrTy(), args, false);
+        auto decl = backend->TheModule->getOrInsertFunction("simplImpl", FT);
+        // Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
+        return backend->Builder.CreateCall(decl);
+    }
+
+    if (!implementation->value->is<IR::ExpressionValue>()) {
+        ::error("%1%: expected expression for property", implementation);
+        return nullptr;
+    }
+    auto propv = implementation->value->to<IR::ExpressionValue>();
+
+    if (propv->expression->is<IR::ConstructorCallExpression>()) {
+        auto cc = P4::ConstructorCall::resolve(
+            propv->expression->to<IR::ConstructorCallExpression>(),
+            refmap, typemap);
+        if (!cc->is<P4::ExternConstructorCall>()) {
+            ::error("%1%: expected extern object for property", implementation);
+            return nullptr;
+        }
+        auto ecc = cc->to<P4::ExternConstructorCall>();
+        std::cout << "ecc is -- " << *ecc->cce << std::endl;
+        auto implementationType = ecc->type;
+        auto arguments = ecc->cce->arguments;
+        auto add_size = [&arguments](size_t arg_index) {
+            auto size_expr = arguments->at(arg_index);
+            if (!size_expr->is<IR::Constant>()) {
+                ::error("%1% must be a constant", size_expr);
+            }
+        };
+        if (implementationType->name == LLBMV2::TableImplementation::actionSelectorName) {
+            BUG_CHECK(arguments->size() == 3, "%1%: expected 3 arguments", arguments);
+            add_size(1);
+            auto hash = arguments->at(0);
+            auto ei = P4::EnumInstance::resolve(hash, typemap);
+            if (ei == nullptr) {
+                ::error("%1%: must be a constant on this target", hash);
+            } else {
+                return createTableFunction(3, ecc->cce, "actionSelector");
+            }
+            // createTableFunction(3,ecc->cce,extfn->method->name); 
+            // auto input = mkArrayField(selector, "input");
+            // for (auto ke : key->keyElements) {
+            //     auto mt = refmap->getDeclaration(ke->matchType->path, true)
+            //             ->to<IR::Declaration_ID>();
+            //     BUG_CHECK(mt != nullptr, "%1%: could not find declaration", ke->matchType);
+            //     if (mt->name.name != LLBMV2::MatchImplementation::selectorMatchTypeName)
+            //         continue;
+
+            //     auto expr = ke->expression;
+            //     std::cout << "#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
+            //     std::cout << *expr;
+            //     std::cout << "\n#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
+            //     auto jk = conv->convert(expr);
+            //     input->append(jk);
+            //     std::cout << input->toString();
+            // }
+        } else if (implementationType->name == LLBMV2::TableImplementation::actionProfileName) {
+            return createTableFunction(1, ecc->cce, "actionProfile");            
+        } else {
+            ::error("%1%: unexpected value for property", propv);
+        }
+    } else if (propv->expression->is<IR::PathExpression>()) {
+        auto pathe = propv->expression->to<IR::PathExpression>();
+        auto decl = refmap->getDeclaration(pathe->path, true);
+        if (!decl->is<IR::Declaration_Instance>()) {
+            ::error("%1%: expected a reference to an instance", pathe);
+            return nullptr;
+        }
+        auto dcltype = typemap->getType(pathe, true);
+        if (!dcltype->is<IR::Type_Extern>()) {
+            ::error("%1%: unexpected type for implementation", dcltype);
+            return nullptr;
+        }
+        auto type_extern_name = dcltype->to<IR::Type_Extern>()->name;
+        if ((type_extern_name != LLBMV2::TableImplementation::actionProfileName) ||
+              (type_extern_name != LLBMV2::TableImplementation::actionSelectorName)) {
+            ::error("%1%: unexpected type for implementation", dcltype);
+            return nullptr;
+        }
+        auto eb = backend->getToplevelBlock()->getValue(decl->getNode());
+        if (eb) {
+            BUG_CHECK(eb->is<IR::ExternBlock>(), "Not an extern block?");
+            // backend->getSimpleSwitch()->convertExternInstances(decl->to<IR::Declaration>(),
+            //             eb->to<IR::ExternBlock>(), action_profiles, selector_check);
+            assert(false && "Not yet handled!");
+        }
+    } else {
+        ::error("%1%: unexpected value for property", propv);
+        return nullptr;
+    }
+    return nullptr;
+}
+
+void ToIR::convertTable(const IR::P4Table* table) {
+    LOG3("Processing " << dbp(table));
+    cstring name = table->controlPlaneName();
+    cstring table_match_type = backend->getCoreLibrary().exactMatch.name;
+    auto key = table->getKey();
+    std::vector<Type*> arg;
+    std::vector<Value*> param;
+
+    if (key != nullptr) {
+        for (auto ke : key->keyElements) {
+            auto expr = ke->expression;
+            auto ket = typemap->getType(expr, true);
+            if (!ket->is<IR::Type_Bits>() && !ket->is<IR::Type_Boolean>())
+                ::error("%1%: Unsupported key type %2%", expr, ket);
+
+            auto match_type = getKeyMatchType(ke);
+            if (match_type == LLBMV2::MatchImplementation::selectorMatchTypeName)
+                continue;
+            // Decreasing order of precedence (bmv2 specification):
+            // 0) more than one LPM field is an error
+            // 1) if there is at least one RANGE field, then the table is RANGE
+            // 2) if there is at least one TERNARY field, then the table is TERNARY
+            // 3) if there is a LPM field, then the table is LPM
+            // 4) otherwise the table is EXACT
+            if (match_type != table_match_type) {
+                if (match_type == LLBMV2::MatchImplementation::rangeMatchTypeName)
+                    table_match_type = LLBMV2::MatchImplementation::rangeMatchTypeName;
+                if (match_type == backend->getCoreLibrary().ternaryMatch.name &&
+                    table_match_type != LLBMV2::MatchImplementation::rangeMatchTypeName)
+                    table_match_type = backend->getCoreLibrary().ternaryMatch.name;
+                if (match_type == backend->getCoreLibrary().lpmMatch.name &&
+                    table_match_type == backend->getCoreLibrary().exactMatch.name)
+                    table_match_type = backend->getCoreLibrary().lpmMatch.name;
+            } else if (match_type == backend->getCoreLibrary().lpmMatch.name) {
+                ::error("%1%, Multiple LPM keys in table", table);
+            }
+
+
+
+            mpz_class mask;
+            if (auto mexp = expr->to<IR::BAnd>()) {
+                if (mexp->right->is<IR::Constant>()) {
+                    mask = mexp->right->to<IR::Constant>()->value;
+                    expr = mexp->left;
+                } else if (mexp->left->is<IR::Constant>()) {
+                    mask = mexp->left->to<IR::Constant>()->value;
+                    expr = mexp->right;
+                } else {
+                    ::error("%1%: key mask must be a constant", expr); }
+            } else if (auto slice = expr->to<IR::Slice>()) {
+                expr = slice->e0;
+                int h = slice->getH();
+                int l = slice->getL();
+                mask = Util::maskFromSlice(h, l);
+            }
+
+            std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+            Value *FBloc;
+            auto it = backend->str.find(table_match_type.c_str());
+            std::cout << table_match_type <<"\n";
+            if(it != backend->str.end())   {
+                FBloc = backend->str[table_match_type.c_str()];
+            }
+            else {
+                std::cout << "not present; adding \n";               
+                Constant *fname = ConstantDataArray::getString(backend->TheContext,table_match_type.c_str(), true);
+                FBloc = new GlobalVariable(*backend->function->getParent(),fname->getType(),true,GlobalValue::PrivateLinkage,fname);
+                backend->str.insert(std::pair<std::string,Value*>(table_match_type.c_str(), FBloc));
+            }
+            param.push_back(FBloc);
+            arg.push_back(FBloc->getType());
+            std::cout << *expr << "\n";
+            auto val = processExpression(expr);
+            // val->dump();
+            auto type = val->getType();
+            param.push_back(val);
+            arg.push_back(type);
+            std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+            
+        }
+    }
+    // StructType *structTable = llvm::StructType::create(backend->TheContext, members, "table."+table->name);
+    Value* sizeVal;
+
+    auto impl = table->properties->getProperty(LLBMV2::TableAttributes::implementationName);
+    Value* val = handleTableImplementation(impl);
+    assert(val != nullptr && "Table Implementation should be converted");
+    param.push_back(val);
+    arg.push_back(val->getType());
+    unsigned size = 0;
+    auto sz = table->properties->getProperty(LLBMV2::TableAttributes::sizeName);
+    if (sz != nullptr) {
+        if (sz->value->is<IR::ExpressionValue>()) {
+            auto expr = sz->value->to<IR::ExpressionValue>()->expression;
+            if (!expr->is<IR::Constant>()) {
+                ::error("%1% must be a constant", sz);
+                size = 0;
+            } else {
+                size = expr->to<IR::Constant>()->asInt();
+            }
+        } else {
+            ::error("%1%: expected a number", sz);
+        }
+    }
+    if (size == 0)
+        size = LLBMV2::TableAttributes::defaultTableSize;
+
+    sizeVal = ConstantInt::get(Type::getInt32Ty(backend->TheContext), size);
+    arg.push_back(sizeVal->getType());
+    param.push_back(sizeVal);
+    auto al = table->getActionList();
+   
+    std::vector<Value*> action_fnptr; 
+    
+    for (auto a : al->actionList) {
+        if (a->expression->is<IR::MethodCallExpression>()) {
+            auto mce = a->expression->to<IR::MethodCallExpression>();
+            if (mce->arguments->size() > 0)
+                ::error("%1%: Actions in action list with arguments not supported", a);
+        }
+        auto decl = refmap->getDeclaration(a->getPath(), true);
+        BUG_CHECK(decl->is<IR::P4Action>(), "%1%: should be an action name", a);
+        auto action = decl->to<IR::P4Action>();
+        std::cout << "action decl -- " << *action << "###############\n";
+        auto name = action->controlPlaneName();
+
+        Function* fn = backend->action_function[name];
+        auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
+        backend->Builder.CreateStore(fn, alloca);
+        arg.push_back(alloca->getType());
+        param.push_back(alloca);
+    }
+
+  
+    auto defact = table->properties->getProperty(IR::TableProperties::defaultActionPropertyName);
+    if (defact != nullptr) {
+        if (!defact->value->is<IR::ExpressionValue>()) {
+            ::error("%1%: expected an action", defact);
+        }
+        auto expr = defact->value->to<IR::ExpressionValue>()->expression;
+        const IR::P4Action* action = nullptr;
+
+        if (expr->is<IR::PathExpression>()) {
+            auto path = expr->to<IR::PathExpression>()->path;
+            auto decl = refmap->getDeclaration(path, true);
+            BUG_CHECK(decl->is<IR::P4Action>(), "%1%: should be an action name", expr);
+            action = decl->to<IR::P4Action>();
+        } else if (expr->is<IR::MethodCallExpression>()) {
+            auto mce = expr->to<IR::MethodCallExpression>();
+            auto mi = P4::MethodInstance::resolve(mce,
+                    refmap, typemap);
+            BUG_CHECK(mi->is<P4::ActionCall>(), "%1%: expected an action", expr);
+            action = mi->to<P4::ActionCall>()->action;
+        } else {
+            ::error("%1%: unexpected expression", expr);
+        }
+
+        Function* fn = backend->action_function[action->controlPlaneName()];
+        auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
+        backend->Builder.CreateStore(fn, alloca);
+        arg.push_back(alloca->getType());
+        param.push_back(alloca);
+        //add metadata to check const; defact->isConstant 
+        // entry->emplace("action_entry_const", defact->isConstant);
+    }
+    // for(auto x:arg) {
+    //     x->dump();
+    // }
+    // for(auto x:param)
+    //     x->getType()->dump();
+    FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), arg, false);
+    Function *decl = Function::Create(FT, Function::ExternalLinkage,  "apply_"+name, backend->TheModule.get());
+    auto call = backend->Builder.CreateCall(decl, param);
+    convertTableEntries(table, call);
 }

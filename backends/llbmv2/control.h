@@ -42,26 +42,11 @@ class ControlConverter : public Inspector {
     P4::TypeMap*           typeMap;
     ExpressionConverter*   conv;
     LLBMV2::JsonObjects*     json;
-
- protected:
-    Util::IJson* convertTable(const CFG::TableNode* node,
-                              Util::JsonArray* action_profiles,
-                              LLBMV2::SharedActionSelectorCheck& selector_check);
-    void convertTableEntries(const IR::P4Table *table, Util::JsonObject *jsonTable);
-    cstring getKeyMatchType(const IR::KeyElement *ke);
-    /// Return 'true' if the table is 'simple'
-    bool handleTableImplementation(const IR::Property* implementation, const IR::Key* key,
-                                   Util::JsonObject* table, Util::JsonArray* action_profiles,
-                                   LLBMV2::SharedActionSelectorCheck& selector_check);
-    Util::IJson* convertIf(const CFG::IfNode* node, cstring prefix);
-    Util::IJson* convertControl(const IR::ControlBlock* block, cstring name,
-                                Util::JsonArray *counters, Util::JsonArray* meters,
-                                Util::JsonArray* registers);
-
+    
  public:
     bool preorder(const IR::PackageBlock* b) override;
     bool preorder(const IR::ControlBlock* b) override;
-    bool preorder(const IR::P4Action* a) override;
+    bool preorder(const IR::P4Action* a) override;   
 
     explicit ControlConverter(Backend *backend) : backend(backend), toIR(new ToIR(this->backend)),
         refMap(backend->getRefMap()), typeMap(backend->getTypeMap()),

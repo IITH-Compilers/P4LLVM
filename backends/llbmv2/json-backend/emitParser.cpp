@@ -129,10 +129,11 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
                 auto argtype = mce->getFunctionType()->getFunctionParamType(0);
                 // Ideally, the condtion checks whether arg is of header type,
                 // At this point it should be sure that argtype will be Type_header
-                if (!argtype->isStructTy()) {
+                // if (!argtype->isStructTy()) {
+                if (argtype->isPointerTy() && !argtype->getPointerElementType()->isStructTy()) {
                     // ::error("%1%: extract only accepts arguments with header types, not %2%",
                     //         arg, argtype);
-                    errs() << "extract only accepts arguments with header types, not : "
+                    errs() << "ERROR : extract only accepts arguments with header types, not : "
                             << argtype->getTypeID() << "\n";
                     exit(1); 
                     return result;

@@ -38,7 +38,7 @@ void ConvertDeparser::convertDeparserBody(const IR::Vector<IR::StatOrDecl>* body
                     if (em->method->name.name == backend->getCoreLibrary().packetOut.emit.name) {
                         BUG_CHECK(mc->arguments->size() == 1,
                                   "Expected exactly 1 argument for %1%", mc);
-                        toIR->createExternFunction(1, mc, em->method->name.name);
+                        toIR->createExternFunction(1, mc, em->method->name.name,mi);
                     }
                     continue;
                 }

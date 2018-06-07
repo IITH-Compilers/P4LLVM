@@ -186,6 +186,9 @@ public:
             Builder.CreateRetVoid();
     }
 
+    std::map<cstring, llvm::Function *> action_function;    
+    std::map<std::string, Value*> str;
+
     void dumpLLVMIR() {
         std::cout << "******************************************************************************\n\n";
         std::error_code ec;         

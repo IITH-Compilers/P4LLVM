@@ -177,6 +177,7 @@ void Backend::convert(BMV2Options& options) {
         }
     }
     std::cout << "----------------enums end-------------------\n";
+
     if (::errorCount() > 0)
         return;
 
@@ -349,6 +350,11 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
         return nullptr;
     }
 
+    else if (t->is<IR::Type_Error>()) {
+        llvm::Type *temp = Type::getInt32Ty(TheContext);                         
+        defined_type[t->toString()] = temp;
+        return temp;    
+    }
 
     llvm_unreachable("Unhandled type in getCorrespondingType()");
     return nullptr;
