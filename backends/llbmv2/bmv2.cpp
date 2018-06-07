@@ -116,13 +116,13 @@ int main(int argc, char *const argv[]) {
     if (::errorCount() > 0)
         return 1;
 
-    if (!options.outputFile.isNullOrEmpty()) {
-        std::ostream* out = openFile(options.outputFile, false);
-        if (out != nullptr) {
-            backend.serialize(*out);
-            out->flush();
-        }
-    }
+    // if (!options.outputFile.isNullOrEmpty()) {
+    //     std::ostream* out = openFile(options.outputFile, false);
+    //     if (out != nullptr) {
+    //         backend.serialize(*out);
+    //         out->flush();
+    //     }
+    // }
 
     P4::serializeP4RuntimeIfRequired(program, options);
 

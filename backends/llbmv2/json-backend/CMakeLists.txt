@@ -11,6 +11,7 @@ add_library(LLVMJsonBackend MODULE
     llvm-json.cpp
     emitHeader.cpp
     emitParser.cpp
+    emitDeparser.cpp
     helpers.cpp
 )
 

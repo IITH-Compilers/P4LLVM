@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "helpers.h"
 
+using namespace llvm;
 namespace LLBMV2 {
 
 /// constant definition for LLBMV2
@@ -113,6 +114,83 @@ std::string getAllocaName(llvm::Instruction *I)
     {
         assert(false && "Alloca name is not in allocaMap");
         return "";
+    }
+}
+
+static bool isIndex1D(llvm::GetElementPtrInst *gep)
+{
+    if (gep->hasAllZeroIndices())
+        return true;
+    if (gep->getNumIndices() > 2)
+        return false;
+    return true;
+}
+
+static unsigned get1DIndex(llvm::GetElementPtrInst *gep)
+{
+    for (auto id = gep->idx_begin(); id != gep->idx_end(); id++)
+    {
+        unsigned val = dyn_cast<ConstantInt>(id)->getZExtValue();
+        errs() << "1D index : " << val << "\n";
+        if (val != 0)
+            return val;
+    }
+    return 0;
+}
+
+static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep)
+{
+    auto id = gep->idx_begin();
+    id++; // ignore the first index as it will be a zero corresponding to the current type
+    std::string result;
+    auto src_type = gep->getSourceElementType();
+    for (; id != gep->idx_end(); id++)
+    {
+        unsigned val = dyn_cast<ConstantInt>(id)->getZExtValue();
+        if (isa<StructType>(src_type))
+            result = result + dyn_cast<StructType>(src_type)->getName().str() + ".field_" + std::to_string(val) + ".";
+        else
+            assert(false && "This should not happen");
+        src_type = dyn_cast<StructType>(src_type)->getElementType(val);
+    }
+    return result.substr(0, result.length() - 2);
+}
+
+std::string getFieldName(Value *arg)
+{
+    errs() << "input inst is \n"
+           << *arg << "\n";
+    if (!isa<Instruction>(arg))
+        return "";
+    if (isa<AllocaInst>(arg))
+        return "." + getAllocaName(dyn_cast<Instruction>(arg));
+    auto gep = dyn_cast<GetElementPtrInst>(arg);
+    if (gep)
+    {
+        errs() << "No of operands in gep : " << gep->getNumOperands() << "\n";
+        if (isIndex1D(gep))
+        {
+            auto src_type = dyn_cast<StructType>(gep->getSourceElementType());
+            assert(src_type != nullptr && "This should not happen");
+            return getFieldName(gep->getPointerOperand()) + "." + src_type->getName().str() + ".field_" + std::to_string(get1DIndex(gep));
+        }
+        else
+        {
+            std::string result = getMultiDimFieldName(gep);
+            return result + getFieldName(gep);
+        }
+    }
+
+    if (auto ld = dyn_cast<LoadInst>(arg))
+    {
+        errs() << "No of operands in load : " << ld->getNumOperands() << "\n";
+        return getFieldName(ld->getOperand(0));
+    }
+
+    if (auto bc = dyn_cast<BitCastInst>(arg))
+    {
+        errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
+        return getFieldName(bc->getOperand(0));
     }
 }
 

@@ -21,7 +21,11 @@ limitations under the License.
 #include "lib/cstring.h"
 #include "lib/json.h"
 #include "lib/ordered_map.h"
-#include "llvm-5.0/llvm/IR/Instruction.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/Support/raw_ostream.h"
 // #include "../analyzer.h"
 // #include "frontends/common/model.h"
 
@@ -74,6 +78,10 @@ Util::JsonArray* pushNewArray(Util::JsonArray* parent);
 Util::JsonObject* mkPrimitive(cstring name, Util::JsonArray* appendTo);
 std::string getAllocaName(llvm::Instruction *I);
 bool setAllocaName(llvm::Instruction *I, std::string name);
+static bool isIndex1D(llvm::GetElementPtrInst *gep);
+static unsigned get1DIndex(llvm::GetElementPtrInst *gep);
+static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep);
+std::string getFieldName(llvm::Value *arg);
 
 
 // cstring stringRepr(mpz_class value, unsigned bytes = 0);

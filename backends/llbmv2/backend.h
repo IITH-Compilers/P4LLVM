@@ -255,7 +255,8 @@ public:
         MPM.add((*JsonBackend)());
         MPM.run(*TheModule.get());
         std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Sucessfully ran pass" << std::endl;
-        // dlclose(handle);
+        dlclose(handle);
+        return;
     }
 };
 

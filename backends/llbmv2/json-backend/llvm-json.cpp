@@ -13,6 +13,7 @@
 #include "lib/json.h"
 #include "emitHeader.h"
 #include "emitParser.h"
+#include "emitDeparser.h"
 #include <fstream>
 #include <iostream>
 #include "helpers.h"
@@ -28,6 +29,13 @@ public:
 	JsonBackend() : ModulePass(ID) {
 		json = new LLBMV2::JsonObjects();
 		pc = new LLBMV2::ParserConverter(json);
+		cd = new LLBMV2::ConvertDeparser(json);
+	}
+
+	~JsonBackend() {
+		delete json;
+		delete pc;
+		delete cd;
 	}
 
 	virtual bool runOnModule(Module &M) {
@@ -44,12 +52,14 @@ public:
 			emitHeaders(&*fun);
 		}
 		emitParser(M);
+		emitDeparser(M);
 		printJsonToFile(M.getSourceFileName()+".ll.json");
 		return false;
 	}
 	bool emitHeaders(Function *F);
 	void emitLocalVariables(Module &M);
 	void emitParser(Module &M);
+	void emitDeparser(Module &M);
 
 private:
 		Util::JsonObject jsonTop;
@@ -69,12 +79,21 @@ private:
 								NamedMDNode *header_union_md);
 		LLBMV2::ConvertHeaders ch;
 		LLBMV2::ParserConverter *pc;
+		LLBMV2::ConvertDeparser *cd;
 		void printJsonToFile(const std::string fn);
 		std::map<llvm::StructType*, std::string> *struct2Type;
 };
 }
 
 char JsonBackend::ID = 0;
+
+void JsonBackend::emitDeparser(Module &M) {
+	for (auto fn = M.begin(); fn != M.end(); fn++) {
+		if ((&*fn)->getAttributes().getFnAttributes().hasAttribute("Deparser")) {
+			cd->processDeparser((&*fn));
+		}
+	}
+}
 
 void JsonBackend::emitParser(Module &M) {
 	for (auto fn = M.begin(); fn != M.end(); fn++) {
