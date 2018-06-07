@@ -354,6 +354,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
         //     scalars_width += errorWidth;
         } else {
             // P4C_UNIMPLEMENTED("%1%: type not yet handled on this target", type);
+            llvm::errs() << *v << "\n";
             llvm::errs() << type->getTypeID() << " : type is not handled\n";
             assert(false && "Type not handled"); 
         }

@@ -201,7 +201,7 @@ void Backend::convert(BMV2Options& options) {
         new ConvertParser(this),
         // new ConvertActions(this),
         new ConvertControl(this),
-        // new ConvertDeparser(this),
+        new ConvertDeparser(this),
     };
 
     codegen_passes.setName("CodeGen");

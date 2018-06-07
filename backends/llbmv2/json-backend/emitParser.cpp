@@ -551,6 +551,104 @@ bool ParserConverter::processParser(llvm::Function *F) {
             }
         }
         // convert transitions
+        auto term = state->getTerminator();
+        unsigned successors = term->getNumSuccessors();
+        if(successors > 1) {
+            if(auto switch_inst = dyn_cast<SwitchInst>(term)) {
+               for(unsigned s = 0; s < successors; s++) {
+                   auto trans = new Util::JsonObject();
+                   if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
+                       dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
+                        trans->emplace("value", "default");
+                    else {
+                        errs() << "\n" << dyn_cast<Value>(term->getSuccessor(s))->getName().str() << "\n";
+                        trans->emplace("value", switch_inst->findCaseDest(term->getSuccessor(s))->getSExtValue());
+                    }
+                    trans->emplace("mask", Util::JsonValue::null);
+                    if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
+                        dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
+                        trans->emplace("next_state", Util::JsonValue::null);
+                    else
+                        trans->emplace("next_state", term->getSuccessor(s)->getName().str());
+                    json->add_parser_transition(state_id, trans);
+               }
+            }else if(BranchInst* cond_branch = dyn_cast<BranchInst>(term)) {
+                if(cond_branch->isConditional()) {
+                    Value *cond = cond_branch->getCondition();
+                    if(auto icmp = dyn_cast<ICmpInst>(cond)) {
+                        if(icmp->isEquality()) {
+                            int64_t jmpVal;
+                            if(isa<ConstantInt>(icmp->getOperand(0)) &&
+                                !isa<ConstantInt>(icmp->getOperand(1))) {
+                                jmpVal = dyn_cast<ConstantInt>(icmp->getOperand(0))->getSExtValue();
+                            } else if (!isa<ConstantInt>(icmp->getOperand(0)) &&
+                                isa<ConstantInt>(icmp->getOperand(1))) {
+                                jmpVal = dyn_cast<ConstantInt>(icmp->getOperand(1))->getSExtValue();
+                            } else {
+                                assert(false && "non-const value in switch case, should not happen");
+                                return false;
+                            }
+                            if (dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "accept" ||
+                                dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "reject") {
+                                auto trans1 = new Util::JsonObject();
+                                trans1->emplace("value", "default");
+                                trans1->emplace("mask", Util::JsonValue::null);
+                                trans1->emplace("next_state", Util::JsonValue::null);
+                                json->add_parser_transition(state_id, trans1);
+
+                                auto trans2 = new Util::JsonObject();
+                                trans2->emplace("value", jmpVal);
+                                trans2->emplace("mask", Util::JsonValue::null);
+                                auto next_state = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
+                                trans2->emplace("next_state", next_state);
+                                json->add_parser_transition(state_id, trans2);
+                            } else if(dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "accept" ||
+                                dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "reject") {
+                                auto trans1 = new Util::JsonObject();
+                                trans1->emplace("value", "default");
+                                trans1->emplace("mask", Util::JsonValue::null);
+                                trans1->emplace("next_state", Util::JsonValue::null);
+                                json->add_parser_transition(state_id, trans1);
+
+                                auto trans2 = new Util::JsonObject();
+                                trans2->emplace("value", jmpVal);
+                                trans2->emplace("mask", Util::JsonValue::null);
+                                auto next_state = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
+                                trans2->emplace("next_state", next_state);
+                                json->add_parser_transition(state_id, trans2);
+                            } else {
+                                assert(false && "condtional branch is not expected when there is no default state(accept/reject)");
+                                return false;
+                            }
+                        }
+                        else {
+                            assert(false && "non equality in parser branch conditon, should not happen");
+                            return false;
+                        }
+                    }
+                    else {
+                        assert(false && "parser branch is not icmp, should not happen");
+                        return false;
+                    }
+                }
+            }
+            else {
+                assert(false && "Never come here");
+                return false;
+            }
+
+        } else if(successors == 1) {
+            auto trans = new Util::JsonObject();
+            trans->emplace("value", "default");
+            trans->emplace("mask", Util::JsonValue::null);
+            auto next_state = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
+            trans->emplace("next_state", next_state);
+            json->add_parser_transition(state_id, trans);
+        }else {
+            assert(false && "Never come here");
+            return false;
+        }
+
         // if (state->selectExpression != nullptr) {
         //     if (state->selectExpression->is<IR::SelectExpression>()) {
         //         auto expr = state->selectExpression->to<IR::SelectExpression>();
