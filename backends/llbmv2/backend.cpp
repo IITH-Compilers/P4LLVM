@@ -177,6 +177,7 @@ void Backend::convert(BMV2Options& options) {
         }
     }
     std::cout << "----------------enums end-------------------\n";
+
     if (::errorCount() > 0)
         return;
 
