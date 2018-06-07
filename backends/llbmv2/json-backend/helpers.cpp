@@ -90,6 +90,32 @@ unsigned nextId(cstring group) {
     return counters[group]++;
 }
 
+bool setAllocaName(llvm::Instruction *I, std::string name)
+{
+    if (allocaMap.find(I) == allocaMap.end())
+    {
+        allocaMap[I] = name;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+std::string getAllocaName(llvm::Instruction *I)
+{
+    if (allocaMap.find(I) != allocaMap.end())
+    {
+        return allocaMap[I];
+    }
+    else
+    {
+        assert(false && "Alloca name is not in allocaMap");
+        return "";
+    }
+}
+
 }  // namespace LLBMV2
 
 

@@ -287,6 +287,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
     // varbit, struct and stack introduce new header types
     // for (auto v : backend->getStructure().variables) {
     unsigned allocaCount = 0;
+    std::string allocaName;
     for(auto v : *allocaList) {
         Type* type = v->getAllocatedType();
         if (type->isStructTy()) {
@@ -294,10 +295,14 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             // assert(st != nullptr && "Alloca is not of Struct type");
             // auto metadata_type = st->controlPlaneName();
             auto metadata_type = "dont_know";
-            if ((*struct2Type)[st] == "header")
-                json->add_header(metadata_type, st->getName().str() + "_"+ std::to_string(allocaCount++));
-            else
-                json->add_metadata(metadata_type, st->getName().str() + "_" + std::to_string(allocaCount++));
+            if ((*struct2Type)[st] == "header") {
+                allocaName = st->getName().str() + "_"+ std::to_string(allocaCount++);
+                json->add_header(metadata_type, allocaName);
+            }
+            else {
+                allocaName = st->getName().str() + "_" + std::to_string(allocaCount++);
+                json->add_metadata(metadata_type, allocaName);
+            }
             addHeaderType(st, struct2Type, json);
         // } else if (auto stack = type->to<IR::Type_Stack>()) {
         } else if (type->isArrayTy() && type->getArrayElementType()->isStructTy()) {
@@ -315,7 +320,8 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
                 auto header_id = json->add_header(header_type, name);
                 header_ids.push_back(header_id);
             }
-            json->add_header_stack(header_type, header_type+"_"+std::to_string(allocaCount),
+            std::string allocaName = header_type+"_"+std::to_string(allocaCount++);
+            json->add_header_stack(header_type, allocaName,
                                     type->getArrayNumElements(), header_ids);
         // } else if (type->is<IR::Type_Varbits>()) {
         //     // For each varbit variable we synthesize a separate header instance,
@@ -335,11 +341,13 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
         //     addHeaderType(hdrType);
         } else if (type->isVectorTy() && type->getVectorElementType()->isIntegerTy(1)) {
             // The above is the condition of checking `bits` type
-            unsigned nBits = type->getArrayNumElements();
-            addHeaderField(json, scalarsTypeName, ("alloca_" + std::to_string(allocaCount++)), nBits, false);
+            unsigned nBits = type->getVectorNumElements();
+            allocaName =  "scalars.alloca_" + std::to_string(allocaCount++);
+            addHeaderField(json, scalarsTypeName, allocaName, nBits, false);
             scalars_width += nBits;
         } else if (type->isIntegerTy(1)) {
-            addHeaderField(json, scalarsTypeName, "alloca_" + std::to_string(allocaCount++), boolWidth, false);
+            allocaName =  "scalars.alloca_" + std::to_string(allocaCount++);
+            addHeaderField(json, scalarsTypeName, allocaName, boolWidth, false);
             scalars_width += boolWidth;
         // } else if (type->is<IR::Type_Error>()) {
         //     addHeaderField(scalarsTypeName, v->name.name, errorWidth, 0);
@@ -349,6 +357,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             llvm::errs() << type->getTypeID() << " : type is not handled\n";
             assert(false && "Type not handled"); 
         }
+        setAllocaName(v, allocaName);
     }
 
     // always-have metadata instance

@@ -22,7 +22,7 @@ limitations under the License.
 #include "lib/json.h"
 // #include "frontends/p4/typeMap.h"
 // #include "frontends/common/resolveReferences/referenceMap.h"
-// #include "helpers.h"
+#include "helpers.h"
 // #include "JsonObjects.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "lib/cstring.h"

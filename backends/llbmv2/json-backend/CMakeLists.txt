@@ -11,6 +11,7 @@ add_library(LLVMJsonBackend MODULE
     llvm-json.cpp
     emitHeader.cpp
     emitParser.cpp
+    helpers.cpp
 )
 
 # Use C++11 to compile your pass (i.e., supply -std=c++11).

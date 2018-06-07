@@ -25,6 +25,7 @@ limitations under the License.
 // #include "expression.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
+#include "helpers.h"
 
 namespace LLBMV2 {
 

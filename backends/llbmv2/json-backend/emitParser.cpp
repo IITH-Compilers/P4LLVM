@@ -62,9 +62,11 @@ std::string ParserConverter::getMultiDimFieldName(llvm::GetElementPtrInst *gep) 
 }
 
 std::string ParserConverter::getFieldName(Value* arg) {
-    errs() << "input inst is \n" << *arg;
-    if(! isa<Instruction>(arg) || isa<AllocaInst>(arg))
+    errs() << "input inst is \n" << *arg << "\n";
+    if(! isa<Instruction>(arg))
         return "";
+    if(isa<AllocaInst>(arg))
+        return "."+getAllocaName(dyn_cast<Instruction>(arg));
     auto gep = dyn_cast<GetElementPtrInst>(arg);
     if(gep) {
         errs() << "No of operands in gep : " << gep->getNumOperands() << "\n";
@@ -134,8 +136,11 @@ Util::IJson* ParserConverter::getJsonExp(Value *inst) {
         result->emplace("field", headername.c_str());
         return result;
     }
+    else if (auto bc = dyn_cast<BitCastInst>(inst)) {
+        return getJsonExp(bc->getOperand(0));
+    }
     else {
-        errs() << *inst << "\n" << "Unhandled instrution in getJsonExp\n";
+        errs() << *inst << "\n" << "ERROR : Unhandled instrution in getJsonExp\n";
         assert(false);
         return result;
     }
@@ -146,6 +151,7 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
     auto result = new Util::JsonObject();
     auto params = mkArrayField(result, "parameters");
     if (isa<StoreInst>(inst)) {
+        errs() << "processing store for parser-states\n" << *inst << "\n";
         auto assign = dyn_cast<StoreInst>(inst);
         cstring operation = "set";
         std::string left_field = getFieldName(assign->getOperand(1)).substr(1);
