@@ -41,7 +41,7 @@ public:
     // bool preorder(const IR::SwitchStatement* t) override;
         
     
-    Value* createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name);
+    Value* createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name, MethodInstance *minst);
     llvm::Value* processExpression(const IR::Expression *e, BasicBlock* bbIf=nullptr, BasicBlock* bbElse=nullptr, bool required_alloca=false);    
 };
 

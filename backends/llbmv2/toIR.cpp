@@ -1,15 +1,20 @@
 #include "toIR.h"
 
-Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name)   {
+Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, cstring name, MethodInstance* minst)   {
     std::vector<Type*> args;
     std::vector<Value*> param;
-    
+
+    auto params = minst->getOriginalParameters()->parameters;
+
     for(int i=0; i<no; i++){
         if(auto inst = mce->arguments->at(i)->to<IR::ListExpression>())   {
             std::cout << "caught list exp\n";
             for(auto c : inst->components) {
                 std::cout << "processing - " << c<<"\n";
-                llvmValue = processExpression(c,nullptr,nullptr,true);
+                if(params.at(i)->hasOut())
+                    llvmValue = processExpression(c,nullptr,nullptr,true);
+                else
+                    llvmValue = processExpression(c);
                 assert(llvmValue != nullptr && "processExpression should not return null");
                 args.push_back(llvmValue->getType());
                 param.push_back(llvmValue);
@@ -17,7 +22,10 @@ Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, c
             }
         }
         else {
-            llvmValue = processExpression(mce->arguments->at(i),nullptr,nullptr,true);
+            if(params.at(i)->hasOut())
+                llvmValue = processExpression(mce->arguments->at(i),nullptr,nullptr,true);
+            else
+                llvmValue = processExpression(mce->arguments->at(i));
             assert(llvmValue != nullptr && "processExpression should not return null");
             args.push_back(llvmValue->getType());
             param.push_back(llvmValue);
@@ -398,10 +406,10 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                                 arg, argtype);
                         return nullptr;
                     }
-                    
+       
                     if (argCount == 1) {
                         std::cout << "calling processexp from mcs of convert parser stmt: ac=1\n";
-                        return createExternFunction(1,mce,extmeth->method->name.name);                      
+                        return createExternFunction(1,mce,extmeth->method->name.name,minst);                      
                     }
                     // if (arg->is<IR::Member>()) {
                     //     auto mem = arg->to<IR::Member>();
@@ -417,7 +425,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                     // }
 
                     if (argCount == 2) {
-                        createExternFunction(2,mce,extmeth->method->name.name);
+                        createExternFunction(2,mce,extmeth->method->name.name,minst);
                         return nullptr;
                     }                   
                 }
@@ -430,13 +438,13 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                     extfn->method->name == v1model.clone.name ||
                     extfn->method->name == v1model.digest_receiver.name) {           
                 BUG_CHECK(mce->arguments->size() == 2, "%1%: Expected 2 arguments", mce);
-                return createExternFunction(2,mce,extfn->method->name);
+                return createExternFunction(2,mce,extfn->method->name,minst);
             }
 
             if (extfn->method->name == v1model.clone.clone3.name ||
                     extfn->method->name == v1model.random.name) {
                 BUG_CHECK(mce->arguments->size() == 3, "%1%: Expected 3 arguments", mce);
-                return createExternFunction(3,mce,extfn->method->name);        
+                return createExternFunction(3,mce,extfn->method->name,minst);        
             }
             if (extfn->method->name == v1model.hash.name) {
                 BUG_CHECK(mce->arguments->size() == 5, "%1%: Expected 5 arguments", mce);                
@@ -453,17 +461,17 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                     ::error("%1%: unexpected algorithm", ei->name);
                     return nullptr;
                 }
-                return createExternFunction(5,mce,extfn->method->name);          
+                return createExternFunction(5,mce,extfn->method->name,minst);          
             }
             if (extfn->method->name == v1model.resubmit.name ||
                 extfn->method->name == v1model.recirculate.name ||
                 extfn->method->name == v1model.truncate.name) {
                 BUG_CHECK(mce->arguments->size() == 1, "%1%: Expected 1 argument", mce);                
-                return createExternFunction(1,mce,extfn->method->name);
+                return createExternFunction(1,mce,extfn->method->name,minst);
             }
             if (extfn->method->name == v1model.drop.name) {
                 BUG_CHECK(mce->arguments->size() == 0, "%1%: Expected 0 arguments", mce);                
-                return createExternFunction(0,mce,extfn->method->name);
+                return createExternFunction(0,mce,extfn->method->name,minst);
             }
 
             BUG("%1%: Unexpected extern function", extfn->method->name.name.c_str());     

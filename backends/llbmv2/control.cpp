@@ -199,7 +199,7 @@ void ChecksumConverter::convertChecksum(const IR::BlockStatement *block, bool ve
                                 mi->expr->arguments->at(3));
                         return;
                     }
-                    toIR->createExternFunction(3,mi->expr,functionName);
+                    toIR->createExternFunction(3,mi->expr,functionName,mi);
                     continue;
                 }
             }
