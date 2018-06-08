@@ -352,6 +352,8 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
         // } else if (type->is<IR::Type_Error>()) {
         //     addHeaderField(scalarsTypeName, v->name.name, errorWidth, 0);
         //     scalars_width += errorWidth;
+        } else if (type->isPointerTy() && type->getPointerElementType()->isFunctionTy()) {
+            continue;
         } else {
             // P4C_UNIMPLEMENTED("%1%: type not yet handled on this target", type);
             llvm::errs() << *v << "\n";
