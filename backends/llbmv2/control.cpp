@@ -47,7 +47,7 @@ bool ControlConverter::preorder(const IR::P4Action* t){
     auto &vars = backend->st.getVars(backend->st.getCurrentScope());
     for (auto vp : vars) {
         if (allnames.find(std::string(vp.first)) == allnames.end()) {
-            args.push_back(((PointerType*)vp.second->getType())->getElementType());
+            args.push_back(vp.second->getType());
             action_call_args[t->name.name].push_back(vp.second);
             names.push_back(std::string(vp.first));
             allnames.insert(std::string(vp.first));
