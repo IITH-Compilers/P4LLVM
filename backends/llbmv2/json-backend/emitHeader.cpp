@@ -70,6 +70,7 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                 assert(ft != nullptr && "This should never happern");
                 if ((*struct2Type)[ft] == "header") {
                     json->add_header(header_type, header_name);
+                    setHeaderType(header_name, header_type, Header);
                 } else if ((*struct2Type)[ft] == "header_union") {
                     // We have to add separately a header instance for all
                     // headers in the union.  Each instance will be named with
@@ -81,9 +82,11 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                                         + ".field_" + std::to_string(unionFieldCount++);
                         auto h_type = dyn_cast<StructType>(uf)->getName().str();
                         unsigned id = json->add_header(h_type, h_name);
+                        setHeaderType(h_name, h_type, Header);
                         fields->append(id);
                     }
                     json->add_union(header_type, fields, header_name);
+                    setHeaderType(header_name, header_type, Union);
                 } else {
                     // BUG("Unexpected type %1%", ft);
                     errs() << "Unexpected type " << ft->getName() << "\n";
@@ -99,16 +102,22 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
             cstring newName = type->getName().str() + ".field_" + std::to_string(fieldCount++);
             if (f->isIntegerTy(1)) {
                 addHeaderField(json, scalarsTypeName, newName, boolWidth, false);
+                if(!setHeaderType(newName, scalarsTypeName, Scalar))
+                    assert(false && "Header name cannot be added to headerMap");
                 scalars_width += boolWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
             } else if (f->isIntegerTy()) {
                 unsigned bitWidth = f->getIntegerBitWidth();
                 addHeaderField(json, scalarsTypeName, newName, bitWidth, true);
+                if (!setHeaderType(newName, scalarsTypeName, Scalar))
+                    assert(false && "Header name cannot be added to headerMap");
                 scalars_width += bitWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
             } else if (f->isVectorTy() && f->getVectorElementType()->isIntegerTy(1)) {
                 unsigned bitWidth = f->getVectorNumElements();
                 addHeaderField(json, scalarsTypeName, newName, bitWidth, false);
+                if (!setHeaderType(newName, scalarsTypeName, Scalar))
+                    assert(false && "Header name cannot be added to headerMap");
                 scalars_width += bitWidth;
                 // backend->scalarMetadataFields.emplace(f, newName);
             // } else if (f->is<IR::Type_Error>()) {
@@ -157,6 +166,7 @@ void ConvertHeaders::addHeaderStacks(llvm::StructType *headersStruct,
         for (unsigned i = 0; i < stack_size; i++) {
             cstring hdrName = ht->getName().str() + "[" + std::to_string(i) + "]";
             auto id = json->add_header(stack_type, hdrName);
+            setHeaderType(hdrName, stack_type, Header);
             ids.push_back(id);
         }
         json->add_header_stack(stack_type, stack_name, stack_size, ids);
@@ -298,6 +308,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             if ((*struct2Type)[st] == "header") {
                 allocaName = st->getName().str() + "_"+ std::to_string(allocaCount++);
                 json->add_header(metadata_type, allocaName);
+                setHeaderType(allocaName, metadata_type, Header);
             }
             else {
                 allocaName = st->getName().str() + "_" + std::to_string(allocaCount++);
@@ -318,6 +329,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             for (unsigned i=0; i < type->getArrayNumElements(); i++) {
                 cstring name = header_type + "[" + std::to_string(i) + "]";
                 auto header_id = json->add_header(header_type, name);
+                setHeaderType(name, header_type, Header);
                 header_ids.push_back(header_id);
             }
             std::string allocaName = header_type+"_"+std::to_string(allocaCount++);
@@ -344,10 +356,14 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             unsigned nBits = type->getVectorNumElements();
             allocaName =  "scalars.alloca_" + std::to_string(allocaCount++);
             addHeaderField(json, scalarsTypeName, allocaName, nBits, false);
+            if (!setHeaderType(allocaName, scalarsTypeName, Scalar))
+                assert(false && "Header name cannot be added to headerMap");
             scalars_width += nBits;
         } else if (type->isIntegerTy(1)) {
             allocaName =  "scalars.alloca_" + std::to_string(allocaCount++);
             addHeaderField(json, scalarsTypeName, allocaName, boolWidth, false);
+            if (!setHeaderType(allocaName, scalarsTypeName, Scalar))
+                assert(false && "Header name cannot be added to headerMap");
             scalars_width += boolWidth;
         // } else if (type->is<IR::Type_Error>()) {
         //     addHeaderField(scalarsTypeName, v->name.name, errorWidth, 0);

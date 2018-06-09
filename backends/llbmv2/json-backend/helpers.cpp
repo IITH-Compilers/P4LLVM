@@ -194,6 +194,63 @@ std::string getFieldName(Value *arg)
     }
 }
 
+cstring getHeaderType(cstring headerType, header_type ht) {
+    switch(ht) {
+        case Scalar:
+            if (headerMap[0].find(headerType) != headerMap[0].end())
+                return headerMap[0][headerType];
+            else
+                return std::string("").c_str();
+        case Header:
+            if (headerMap[1].find(headerType) != headerMap[1].end())
+                return headerMap[1][headerType];
+            else
+                return std::string("").c_str();
+        case Union:
+            if (headerMap[2].find(headerType) != headerMap[2].end())
+                return headerMap[2][headerType];
+            else
+                return std::string("").c_str();
+        default:
+            return std::string("").c_str();
+    }
+}
+
+bool setHeaderType(cstring headername, cstring headerType, header_type ht) {
+    switch(ht) {
+        case Scalar:
+            if (headerMap[0].find(headername) == headerMap[0].end()) {
+                headerMap[0][headername] = headerType;
+                return true;
+            }
+            else
+                return false;
+        case Header:
+            if (headerMap[1].find(headername) == headerMap[1].end()) {
+                headerMap[1][headername] = headerType;
+                return true;
+            }
+            else
+                return false;
+        case Union:
+            if (headerMap[2].find(headername) == headerMap[2].end()) {
+                headerMap[2][headername] = headerType;
+                return true;
+            }
+            else
+                return false;
+        default:
+            return false;
+    }
+}
+
+header_type getBasicHeaderType(cstring headerName) {
+    for(unsigned i : {0, 1, 2}) {
+        if(headerMap[i].find(headerName.c_str()) != headerMap[i].end())
+            return static_cast<header_type>(i);
+    }
+}
+
 }  // namespace LLBMV2
 
 

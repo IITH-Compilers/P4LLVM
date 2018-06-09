@@ -14,6 +14,7 @@
 #include "emitHeader.h"
 #include "emitParser.h"
 #include "emitDeparser.h"
+#include "emitAction.h"
 #include <fstream>
 #include <iostream>
 #include "helpers.h"
@@ -30,6 +31,7 @@ public:
 		json = new LLBMV2::JsonObjects();
 		pc = new LLBMV2::ParserConverter(json);
 		cd = new LLBMV2::ConvertDeparser(json);
+		ca = new LLBMV2::ConvertActions(json);
 	}
 
 	~JsonBackend() {
@@ -47,19 +49,22 @@ public:
 							M.getNamedMetadata("header_union"));
 		emitLocalVariables(M);
 		// Iterate on functions
-		for (auto fun = M.begin(); fun != M.end(); fun++) {
-			errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
-			emitHeaders(&*fun);
-		}
+		// for (auto fun = M.begin(); fun != M.end(); fun++) {
+		// 	errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
+		// 	emitHeaders(&*fun);
+		// }
+		emitHeaders(M);
 		emitParser(M);
 		emitDeparser(M);
+		emitActions(M);
 		printJsonToFile(M.getSourceFileName()+".ll.json");
 		return false;
 	}
-	bool emitHeaders(Function *F);
+	bool emitHeaders(Module &M);
 	void emitLocalVariables(Module &M);
 	void emitParser(Module &M);
 	void emitDeparser(Module &M);
+	void emitActions(Module &M);
 
 private:
 		Util::JsonObject jsonTop;
@@ -80,12 +85,21 @@ private:
 		LLBMV2::ConvertHeaders ch;
 		LLBMV2::ParserConverter *pc;
 		LLBMV2::ConvertDeparser *cd;
+		LLBMV2::ConvertActions *ca;
 		void printJsonToFile(const std::string fn);
 		std::map<llvm::StructType*, std::string> *struct2Type;
 };
 }
 
 char JsonBackend::ID = 0;
+
+void JsonBackend::emitActions(Module &M) {
+	for (auto fn = M.begin(); fn != M.end(); fn++) {
+		if ((&*fn)->getAttributes().getFnAttributes().hasAttribute("action")) {
+			ca->processActions((&*fn));
+		}
+	}
+}
 
 void JsonBackend::emitDeparser(Module &M) {
 	for (auto fn = M.begin(); fn != M.end(); fn++) {
@@ -215,25 +229,28 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
 
-bool JsonBackend::emitHeaders(Function *F) {
+bool JsonBackend::emitHeaders(Module &M) {
 	// Get function arguments
 	// Emit headers recursively for each argument
-	if(F->getAttributes().getFnAttributes().hasAttribute("parser")) {
-		errs() << "Found parser function\n";
-		for(auto param = F->arg_begin(); param != F->arg_end(); param++) {
-			auto st = dyn_cast<StructType>(dyn_cast<PointerType>((&*param)->getType())->getElementType());
-			if (st != nullptr && (*struct2Type)[st] == "struct")
-			{
-				errs() << "Calling parser function\n";
-				ch.processParams(st, struct2Type, json);
+	for(auto fn = M.begin(); fn != M.end(); fn++) {
+		Function *F = &*fn;
+		if(F->getAttributes().getFnAttributes().hasAttribute("parser")) {
+			errs() << "Found parser function\n";
+			for(auto param = F->arg_begin(); param != F->arg_end(); param++) {
+				auto st = dyn_cast<StructType>(dyn_cast<PointerType>((&*param)->getType())->getElementType());
+				if (st != nullptr && (*struct2Type)[st] == "struct")
+				{
+					errs() << "Calling parser function\n";
+					ch.processParams(st, struct2Type, json);
+				}
+				else {
+					errs() << "not calling processParams\n";
+					errs() << (*struct2Type)[st] << "\n";
+				}
 			}
-			else {
-				errs() << "not calling processParams\n";
-				errs() << (*struct2Type)[st] << "\n";
-			}
+			// Padding is calulated for scalars, add it to json now.
+			ch.addScalarPadding(json);
 		}
-		// Padding is calulated for scalars, add it to json now.
-		ch.addScalarPadding(json);
 	}
     return true;
 }

@@ -47,7 +47,7 @@ bool ControlConverter::preorder(const IR::P4Action* t){
     auto &vars = backend->st.getVars(backend->st.getCurrentScope());
     for (auto vp : vars) {
         if (allnames.find(std::string(vp.first)) == allnames.end()) {
-            args.push_back(((PointerType*)vp.second->getType())->getElementType());
+            args.push_back(vp.second->getType());
             action_call_args[t->name.name].push_back(vp.second);
             names.push_back(std::string(vp.first));
             allnames.insert(std::string(vp.first));
@@ -58,6 +58,8 @@ bool ControlConverter::preorder(const IR::P4Action* t){
 
     FunctionType *FT = FunctionType::get(Type::getVoidTy(backend->TheContext), args, false);
     backend->function = Function::Create(FT, Function::ExternalLinkage, Twine(t->name.name), backend->TheModule.get());
+    backend->function->setAttributes(backend->function->getAttributes().addAttribute(backend->TheContext, AttributeList::FunctionIndex, "action"));
+    assert(backend->function->getAttributes().hasAttributes(AttributeList::FunctionIndex) && "attribute not set");
     backend->action_function[t->controlPlaneName()] = backend->function;
     backend->bbInsert = BasicBlock::Create(backend->TheContext, "entry", backend->function);
 

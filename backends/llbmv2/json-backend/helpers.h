@@ -71,6 +71,14 @@ class V1ModelProperties {
 // using ErrorCodesMap = ordered_map<const IR::IDeclaration *, ErrorValue>;
 // using BlockTypeMap = std::map<const IR::Block*, const IR::Type*>;
 static std::map<llvm::Instruction *, std::string> allocaMap;
+static std::map<cstring ,cstring> headerMap[3];
+enum header_type
+{
+    Scalar,
+    Header,
+    Union,
+    Unknown
+};
 // Util::IJson* nodeName(const CFG::Node* node);
 Util::JsonArray* mkArrayField(Util::JsonObject* parent, cstring name);
 Util::JsonArray* mkParameters(Util::JsonObject* object);
@@ -82,6 +90,9 @@ static bool isIndex1D(llvm::GetElementPtrInst *gep);
 static unsigned get1DIndex(llvm::GetElementPtrInst *gep);
 static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep);
 std::string getFieldName(llvm::Value *arg);
+cstring getHeaderType(cstring, header_type ht);
+bool setHeaderType(cstring name, cstring type, header_type ht);
+header_type getBasicHeaderType(cstring);
 
 
 // cstring stringRepr(mpz_class value, unsigned bytes = 0);
