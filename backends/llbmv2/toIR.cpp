@@ -898,8 +898,9 @@ void ToIR::convertTable(const IR::P4Table* table) {
                 ::error("%1%: Unsupported key type %2%", expr, ket);
 
             auto match_type = getKeyMatchType(ke);
-            if (match_type == LLBMV2::MatchImplementation::selectorMatchTypeName)
-                continue;
+
+            // if (match_type == LLBMV2::MatchImplementation::selectorMatchTypeName)
+            //     continue;
             // Decreasing order of precedence (bmv2 specification):
             // 0) more than one LPM field is an error
             // 1) if there is at least one RANGE field, then the table is RANGE
@@ -915,6 +916,8 @@ void ToIR::convertTable(const IR::P4Table* table) {
                 if (match_type == backend->getCoreLibrary().lpmMatch.name &&
                     table_match_type == backend->getCoreLibrary().exactMatch.name)
                     table_match_type = backend->getCoreLibrary().lpmMatch.name;
+                else
+                    table_match_type = match_type;
             } else if (match_type == backend->getCoreLibrary().lpmMatch.name) {
                 ::error("%1%, Multiple LPM keys in table", table);
             }
@@ -963,8 +966,30 @@ void ToIR::convertTable(const IR::P4Table* table) {
             
         }
     }
-    // StructType *structTable = llvm::StructType::create(backend->TheContext, members, "table."+table->name);
-    Value* sizeVal;
+  
+    std::vector<Value*> action_fnptr; 
+    auto al = table->getActionList();
+    
+    for (auto a : al->actionList) {
+        if (a->expression->is<IR::MethodCallExpression>()) {
+            auto mce = a->expression->to<IR::MethodCallExpression>();
+            if (mce->arguments->size() > 0)
+                ::error("%1%: Actions in action list with arguments not supported", a);
+        }
+        auto decl = refmap->getDeclaration(a->getPath(), true);
+        BUG_CHECK(decl->is<IR::P4Action>(), "%1%: should be an action name", a);
+        auto action = decl->to<IR::P4Action>();
+        std::cout << "action decl -- " << *action << "###############\n";
+        auto name = action->controlPlaneName();
+
+        Function* fn = backend->action_function[name];
+        auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
+        backend->Builder.CreateStore(fn, alloca);
+        arg.push_back(alloca->getType());
+        param.push_back(alloca);
+    }
+
+      Value* sizeVal;
 
     auto impl = table->properties->getProperty(LLBMV2::TableAttributes::implementationName);
     Value* val = handleTableImplementation(impl);
@@ -992,30 +1017,7 @@ void ToIR::convertTable(const IR::P4Table* table) {
     sizeVal = ConstantInt::get(Type::getInt32Ty(backend->TheContext), size);
     arg.push_back(sizeVal->getType());
     param.push_back(sizeVal);
-    auto al = table->getActionList();
-   
-    std::vector<Value*> action_fnptr; 
-    
-    for (auto a : al->actionList) {
-        if (a->expression->is<IR::MethodCallExpression>()) {
-            auto mce = a->expression->to<IR::MethodCallExpression>();
-            if (mce->arguments->size() > 0)
-                ::error("%1%: Actions in action list with arguments not supported", a);
-        }
-        auto decl = refmap->getDeclaration(a->getPath(), true);
-        BUG_CHECK(decl->is<IR::P4Action>(), "%1%: should be an action name", a);
-        auto action = decl->to<IR::P4Action>();
-        std::cout << "action decl -- " << *action << "###############\n";
-        auto name = action->controlPlaneName();
 
-        Function* fn = backend->action_function[name];
-        auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
-        backend->Builder.CreateStore(fn, alloca);
-        arg.push_back(alloca->getType());
-        param.push_back(alloca);
-    }
-
-  
     auto defact = table->properties->getProperty(IR::TableProperties::defaultActionPropertyName);
     if (defact != nullptr) {
         if (!defact->value->is<IR::ExpressionValue>()) {
