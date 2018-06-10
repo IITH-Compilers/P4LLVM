@@ -79,6 +79,8 @@ enum header_type
     Union,
     Unknown
 };
+static std::map<cstring, unsigned> genNameMap;
+cstring genName(cstring name);
 // Util::IJson* nodeName(const CFG::Node* node);
 Util::JsonArray* mkArrayField(Util::JsonObject* parent, cstring name);
 Util::JsonArray* mkParameters(Util::JsonObject* object);

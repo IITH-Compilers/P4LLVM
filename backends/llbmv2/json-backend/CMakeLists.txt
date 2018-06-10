@@ -14,6 +14,7 @@ add_library(LLVMJsonBackend MODULE
     emitDeparser.cpp
     helpers.cpp
     emitAction.cpp
+    emitControl.cpp
 )
 
 # Use C++11 to compile your pass (i.e., supply -std=c++11).

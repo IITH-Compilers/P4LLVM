@@ -18,12 +18,8 @@ limitations under the License.
 #define _BACKENDS_BMV2_HEADER_H_
 
 #include <list>
-// #include "ir/ir.h"
 #include "lib/json.h"
-// #include "frontends/p4/typeMap.h"
-// #include "frontends/common/resolveReferences/referenceMap.h"
 #include "helpers.h"
-// #include "JsonObjects.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "lib/cstring.h"
 #include "../JsonObjects.h"
@@ -78,14 +74,6 @@ class ConvertHeaders {
     }
 
     ConvertHeaders();
-private:
-    std::map<std::string, unsigned> *genNameMap;
-    std::string genName(std::string name) {
-        if(genNameMap->find(name) == genNameMap->end()) {
-            (*genNameMap)[name] = 0;
-        }
-        return name + std::to_string((*genNameMap)[name]++);
-    }
 };
 
 }  // namespace LLBMV2

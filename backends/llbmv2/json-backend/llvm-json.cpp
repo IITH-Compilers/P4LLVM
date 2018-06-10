@@ -15,6 +15,7 @@
 #include "emitParser.h"
 #include "emitDeparser.h"
 #include "emitAction.h"
+#include "emitControl.h"
 #include <fstream>
 #include <iostream>
 #include "helpers.h"
@@ -32,12 +33,14 @@ public:
 		pc = new LLBMV2::ParserConverter(json);
 		cd = new LLBMV2::ConvertDeparser(json);
 		ca = new LLBMV2::ConvertActions(json);
+		cc = new LLBMV2::ChecksumConverter(json);
 	}
 
 	~JsonBackend() {
 		delete json;
 		delete pc;
 		delete cd;
+		delete cc;
 	}
 
 	virtual bool runOnModule(Module &M) {
@@ -57,6 +60,7 @@ public:
 		emitParser(M);
 		emitDeparser(M);
 		emitActions(M);
+		emitChecksum(M);
 		printJsonToFile(M.getSourceFileName()+".ll.json");
 		return false;
 	}
@@ -65,33 +69,44 @@ public:
 	void emitParser(Module &M);
 	void emitDeparser(Module &M);
 	void emitActions(Module &M);
+	void emitChecksum(Module &M);
 
-private:
-		Util::JsonObject jsonTop;
-		LLBMV2::JsonObjects* json;
-		Util::JsonArray *counters;
-		Util::JsonArray *externs;
-		Util::JsonArray *field_lists;
-		Util::JsonArray *learn_lists;
-		Util::JsonArray *meter_arrays;
-		Util::JsonArray *register_arrays;
-		Util::JsonArray *force_arith;
-		Util::JsonArray *field_aliases;
-		void populateJsonObjects(Module &M);
-		void populateStruct2Type(std::vector<StructType *> structs,
-								NamedMDNode *header_md,
-								NamedMDNode *struct_md,
-								NamedMDNode *header_union_md);
-		LLBMV2::ConvertHeaders ch;
-		LLBMV2::ParserConverter *pc;
-		LLBMV2::ConvertDeparser *cd;
-		LLBMV2::ConvertActions *ca;
-		void printJsonToFile(const std::string fn);
-		std::map<llvm::StructType*, std::string> *struct2Type;
+  private:
+	Util::JsonObject jsonTop;
+	LLBMV2::JsonObjects *json;
+	Util::JsonArray *counters;
+	Util::JsonArray *externs;
+	Util::JsonArray *field_lists;
+	Util::JsonArray *learn_lists;
+	Util::JsonArray *meter_arrays;
+	Util::JsonArray *register_arrays;
+	Util::JsonArray *force_arith;
+	Util::JsonArray *field_aliases;
+	void populateJsonObjects(Module &M);
+	void populateStruct2Type(std::vector<StructType *> structs,
+							 NamedMDNode *header_md,
+							 NamedMDNode *struct_md,
+							 NamedMDNode *header_union_md);
+	LLBMV2::ConvertHeaders ch;
+	LLBMV2::ParserConverter *pc;
+	LLBMV2::ConvertDeparser *cd;
+	LLBMV2::ConvertActions *ca;
+	LLBMV2::ChecksumConverter *cc;
+	void printJsonToFile(const std::string fn);
+	std::map<llvm::StructType *, std::string> *struct2Type;
 };
 }
 
 char JsonBackend::ID = 0;
+
+void JsonBackend::emitChecksum(Module &M) {
+	for (auto fn = M.begin(); fn != M.end(); fn++) {
+		if ((&*fn)->getAttributes().getFnAttributes().hasAttribute("verify_checksum") ||
+		   (&*fn)->getAttributes().getFnAttributes().hasAttribute("update_checksum")) {
+			cc->processChecksum((&*fn));
+		}
+	}
+}
 
 void JsonBackend::emitActions(Module &M) {
 	for (auto fn = M.begin(); fn != M.end(); fn++) {

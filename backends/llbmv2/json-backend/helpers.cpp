@@ -251,6 +251,15 @@ header_type getBasicHeaderType(cstring headerName) {
     }
 }
 
+cstring genName(cstring name)
+{
+    if (genNameMap.find(name) == genNameMap.end())
+    {
+        genNameMap[name] = 0;
+    }
+    return name + std::to_string(genNameMap[name]++);
+}
+
 }  // namespace LLBMV2
 
 

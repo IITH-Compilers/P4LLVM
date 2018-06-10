@@ -32,7 +32,6 @@ Util::JsonArray* ConvertHeaders::pushNewArray(Util::JsonArray* parent) {
 
 ConvertHeaders::ConvertHeaders(){
     // setName("ConvertHeaders");
-    genNameMap = new std::map<std::string, unsigned>();
 }
 
 /**
