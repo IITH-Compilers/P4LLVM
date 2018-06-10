@@ -371,9 +371,11 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             continue;
         } else {
             // P4C_UNIMPLEMENTED("%1%: type not yet handled on this target", type);
-            llvm::errs() << *v << "\n";
+            if(v->getParent()->getParent()->getAttributes().getFnAttributes().hasAttribute("action"))
+                continue;
+            llvm::errs() << "inst is : " << *v << "\n";
             llvm::errs() << type->getTypeID() << " : type is not handled\n";
-            assert(false && "Type not handled"); 
+            assert(false && "Type not handled");
         }
         setAllocaName(v, allocaName);
     }

@@ -119,7 +119,7 @@ Util::IJson *ConvertActions::getJsonExp(Value *inst)
     {
         std::string headername = getFieldName(ld->getOperand(0)).substr(1);
         result->emplace("type", "field");
-        result->emplace("field", headername.c_str());
+        result->emplace("value", headername.c_str());
         return result;
     }
     else if (auto bc = dyn_cast<BitCastInst>(inst))
@@ -152,6 +152,14 @@ Util::IJson *ConvertActions::getJsonExp(Value *inst)
     }
 }
 
+/// return false if the value stored is a parameter of the function
+bool ConvertActions::isAssignment(StoreInst *st) {
+    if(isa<Argument>(st->getOperand(0)) && isa<AllocaInst>(st->getOperand(1)))
+        return false;
+    else
+        return true;
+}
+
 void
 ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
 {
@@ -161,9 +169,22 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
         if (isa<StoreInst>(I))
         {
             auto assign = dyn_cast<StoreInst>(I);
+            if(!isAssignment(assign))
+                continue;
             cstring operation;
             auto left = getFieldName(assign->getOperand(1)).substr(1);
-            auto right = getJsonExp(assign->getOperand(0));
+            auto right = new Util::JsonObject();
+            auto right_val = getJsonExp(assign->getOperand(0));
+            auto right_param = getFieldName(assign->getOperand(0));
+            if(right_param.length() > 0 && isActionParam(right_param.substr(1))) {
+                auto id = getRuntimeID(right_param.substr(1));
+                right->emplace("type", "runtime_data");
+                right->emplace("value", id);
+            }
+            else {
+                right->emplace("type", "field");
+                right->emplace("value", right_val);
+            }
             if (getBasicHeaderType(left) == Union)
                 operation = "assign_union";
             else if (getBasicHeaderType(left) == Header)
@@ -209,101 +230,29 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             continue;
     }
 }
-    // for (auto s : *body)
-    // {
-        // TODO(jafingerhut) - add line/col at all individual cases below,
-        // or perhaps it can be done as a common case above or below
-        // for all of them?
-        // if (!s->is<IR::Statement>()) {
-        //     continue;
-        // } else if (auto block = s->to<IR::BlockStatement>()) {
-        //     convertActionBody(&block->components, result);
-        //     continue;
-        // } else if (s->is<IR::ReturnStatement>()) {
-        //     break;
-    // } else if (s->is<IR::ExitStatement>()) {
-    //     auto primitive = mkPrimitive("exit", result);
-    //     (void)mkParameters(primitive);
-    //     primitive->emplace_non_null("source_info", s->sourceInfoJsonObj());
-    //     break;
-    // } else if (s->is<IR::AssignmentStatement>()) {
-    //     const IR::Expression* l, *r;
-    //     auto assign = s->to<IR::AssignmentStatement>();
-    //     l = assign->left;
-    //     r = assign->right;
 
-    //     cstring operation;
-    //     auto type = typeMap->getType(l, true);
-    //     if (type->is<IR::Type_Varbits>())
-    //         operation = "assign_VL";
-    //     else if (type->is<IR::Type_HeaderUnion>())
-    //         operation = "assign_union";
-    //     else if (type->is<IR::Type_StructLike>())
-    //         operation = "assign_header";
-    //     else
-    //         operation = "assign";
-    //     auto primitive = mkPrimitive(operation, result);
-    //     auto parameters = mkParameters(primitive);
-    //     primitive->emplace_non_null("source_info", assign->sourceInfoJsonObj());
-    //     auto left = conv->convertLeftValue(l);
-    //     parameters->append(left);
-    //     bool convertBool = type->is<IR::Type_Boolean>();
-    //     auto right = conv->convert(r, true, true, convertBool);
-    //     parameters->append(right);
-    //     continue;
-    // } else if (s->is<IR::EmptyStatement>()) {
-    //     continue;
-    // } else if (s->is<IR::MethodCallStatement>()) {
-    //     LOG3("Visit " << dbp(s));
-    //     auto mc = s->to<IR::MethodCallStatement>()->methodCall;
-    //     auto mi = P4::MethodInstance::resolve(mc, refMap, typeMap);
-    //     if (mi->is<P4::ActionCall>()) {
-    //         BUG("%1%: action call should have been inlined", mc);
-    //         continue;
-    //     } else if (mi->is<P4::BuiltInMethod>()) {
-    //         auto builtin = mi->to<P4::BuiltInMethod>();
-
-    //         cstring prim;
-    //         auto parameters = new Util::JsonArray();
-    //         auto obj = conv->convert(builtin->appliedTo);
-    //         parameters->append(obj);
-
-    //         if (builtin->name == IR::Type_Header::setValid) {
-    //             prim = "add_header";
-    //         } else if (builtin->name == IR::Type_Header::setInvalid) {
-    //             prim = "remove_header";
-    //         } else if (builtin->name == IR::Type_Stack::push_front) {
-    //             BUG_CHECK(mc->arguments->size() == 1, "Expected 1 argument for %1%", mc);
-    //             auto arg = conv->convert(mc->arguments->at(0));
-    //             prim = "push";
-    //             parameters->append(arg);
-    //         } else if (builtin->name == IR::Type_Stack::pop_front) {
-    //             BUG_CHECK(mc->arguments->size() == 1, "Expected 1 argument for %1%", mc);
-    //             auto arg = conv->convert(mc->arguments->at(0));
-    //             prim = "pop";
-    //             parameters->append(arg);
-    //         } else {
-    //             BUG("%1%: Unexpected built-in method", s);
-    //         }
-    //         auto primitive = mkPrimitive(prim, result);
-    //         primitive->emplace("parameters", parameters);
-    //         primitive->emplace_non_null("source_info", s->sourceInfoJsonObj());
-    //         continue;
-    //     } else if (mi->is<P4::ExternMethod>()) {
-    //         auto em = mi->to<P4::ExternMethod>();
-    //         LOG3("P4V1:: convert " << s);
-    //         backend->getSimpleSwitch()->convertExternObjects(result, em, mc, s);
-    //         continue;
-    //     } else if (mi->is<P4::ExternFunction>()) {
-    //         auto ef = mi->to<P4::ExternFunction>();
-    //         backend->getSimpleSwitch()->convertExternFunctions(result, ef, mc, s);
-    //         continue;
-    //     }
-    // }
-    // ::error("%1%: not yet supported on this target", s);
-// }
 void
 ConvertActions::convertActionParams(Function *F, Util::JsonArray* params) {
+    // The loops below essentially iterate over Function params
+    // First loop gets param through allocas
+    // While the second loop iterates on Function params and adds them to Json objects
+    // I see a importance for both, if the code is un-optimized, allocas will be there,
+    //      to track them we need first loop
+    // If the code is optimized then no issue of allocas be happy :)
+    for(auto inst = inst_begin(F); inst != inst_end(F); inst++) {
+        if(auto st = dyn_cast<StoreInst>(&*inst)) {
+            unsigned paramCount = 0;
+            if(!isAssignment(st)) {
+                errs() << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@store in convertActionParams : \n" << *st << "\n";
+                /// This store corresponds to a storing a parameter to a alloca
+                auto paramName = (F->getName() + "._" + dyn_cast<Argument>(st->getOperand(0))->getName()).str();
+                setAllocaName(dyn_cast<Instruction>(st->getOperand(1)), paramName);
+                setRuntimeID(paramName, paramCount++);
+                addToActionParamList(paramName);
+            }
+
+        }
+    }
     for (auto p = F->arg_begin(); p != F->arg_end(); p++) {
         // if (!refMap->isUsed(p))
         //     ::warning("Unused action parameter %1%", p);
@@ -312,21 +261,23 @@ ConvertActions::convertActionParams(Function *F, Util::JsonArray* params) {
             continue;
         errs() << "######################################arg is : " << *arg << "\n";    
         auto param = new Util::JsonObject();
-        param->emplace("name", arg->getName());
+        auto paramName = (F->getName() + "._" + arg->getName()).str();
+        param->emplace("name", paramName);
         auto type = arg->getType();
-        // auto type = typeMap->getType(p, true);
         if ((type->isVectorTy() && type->getVectorElementType()->isIntegerTy(1)) ||
             (type->isIntegerTy())) {
+            if(type->isVectorTy())
+                param->emplace("bitwidth", type->getVectorNumElements());
+            else if(type->isIntegerTy())
+                param->emplace("bitwidth", type->getIntegerBitWidth());
+            else
+                assert("This should not happen");
+            params->append(param);
+        }
+        else {
             errs() << "ERROR : Action parameters can only be bit<> or int<> on this target\n";
             exit(1);
         }
-        if(type->isVectorTy())
-            param->emplace("bitwidth", type->getVectorNumElements());
-        else if(type->isIntegerTy())
-            param->emplace("bitwidth", type->getIntegerBitWidth());
-        else
-            assert("This should not happen");
-        params->append(param);
     }
 }
 

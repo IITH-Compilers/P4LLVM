@@ -17,9 +17,6 @@ limitations under the License.
 #ifndef _BACKENDS_BMV2_ACTION_H_
 #define _BACKENDS_BMV2_ACTION_H_
 
-// #include "ir/ir.h"
-// #include "backend.h"
-// #include "simpleSwitch.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
@@ -31,16 +28,41 @@ limitations under the License.
 namespace LLBMV2 {
 
 class ConvertActions {
-    // Backend*               backend;
-    // P4::ReferenceMap*      refMap;
-    // P4::TypeMap*           typeMap;
     LLBMV2::JsonObjects*     json;
-    // ExpressionConverter*   conv;
+    std::map<std::string, unsigned> actionParamMap;
+    std::vector<std::string> actionParamList;
 
     void convertActionBody(llvm::Function *F, Util::JsonArray *body);
     void convertActionParams(llvm::Function *F, Util::JsonArray* params);
     Util::IJson* getJsonExp(llvm::Value *inst);
-    // bool preorder(const IR::PackageBlock* package);
+    bool isAssignment(llvm::StoreInst*);
+    unsigned getRuntimeID(std::string paramName) {
+        if(actionParamMap.find(paramName) == actionParamMap.end())
+            assert(false && "Param not found");
+        return actionParamMap[paramName];
+    }
+    void setRuntimeID(std::string paramName, unsigned id) {
+        if(actionParamMap.find(paramName) == actionParamMap.end())
+            actionParamMap[paramName] = id;
+        else {
+            llvm::errs() << "ERROR : " << "Action param already exit in actionParamMap\n";
+            exit(1);
+        }
+            
+    }
+    void addToActionParamList(std::string paramName) {
+        if (std::find(actionParamList.begin(), actionParamList.end(), paramName)
+            == actionParamList.end())
+            actionParamList.push_back(paramName);
+        else
+            assert(false && "Param already exist in list");
+    }
+    bool isActionParam(std::string paramName) {
+        if (std::find(actionParamList.begin(), actionParamList.end(), paramName)
+            != actionParamList.end())
+            return true;
+        return false;
+    }
  public:
     void processActions(llvm::Function *F);
     explicit ConvertActions(LLBMV2::JsonObjects *json) : json(json) {

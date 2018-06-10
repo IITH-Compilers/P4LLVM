@@ -177,7 +177,7 @@ std::string getFieldName(Value *arg)
         else
         {
             std::string result = getMultiDimFieldName(gep);
-            return result + getFieldName(gep);
+            return result + getFieldName(gep->getPointerOperand());
         }
     }
 
@@ -190,6 +190,7 @@ std::string getFieldName(Value *arg)
     if (auto bc = dyn_cast<BitCastInst>(arg))
     {
         errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
+        assert(bc->getType()->isPointerTy() && "not a pointer type in getFieldName");
         return getFieldName(bc->getOperand(0));
     }
 }
