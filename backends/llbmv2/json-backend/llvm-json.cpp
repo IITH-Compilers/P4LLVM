@@ -128,7 +128,7 @@ void JsonBackend::emitLocalVariables(Module &M) {
 		for(auto inst = inst_begin(&*fn); inst != inst_end(&*fn); inst++) {
 			if(auto alloc = dyn_cast<AllocaInst>(&*inst)) {
 				if(alloc->getAllocatedType()->isStructTy() &&
-				   dyn_cast<StructType>(alloc->getAllocatedType())->getName() == "") {
+				   dyn_cast<StructType>(alloc->getAllocatedType())->hasName()) {
 					allocaList->push_back(alloc);
 				}
 				else if(!alloc->getAllocatedType()->isStructTy()) {

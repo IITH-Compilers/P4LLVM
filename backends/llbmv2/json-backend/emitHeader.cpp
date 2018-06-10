@@ -304,7 +304,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             llvm::StructType* st = dyn_cast<llvm::StructType>(type);
             // assert(st != nullptr && "Alloca is not of Struct type");
             // auto metadata_type = st->controlPlaneName();
-            auto metadata_type = "dont_know";
+            auto metadata_type = st->getName().str();
             if ((*struct2Type)[st] == "header") {
                 allocaName = st->getName().str() + "_"+ std::to_string(allocaCount++);
                 json->add_header(metadata_type, allocaName);
