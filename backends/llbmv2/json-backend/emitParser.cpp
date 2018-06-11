@@ -66,8 +66,9 @@ Util::IJson* ParserConverter::getJsonExp(Value *inst) {
         return result;
     }
     else if (auto ld = dyn_cast<LoadInst>(inst)) {
-        std::string headername = getFieldName(ld->getOperand(0)).substr(1);
-        result->emplace("field", headername.c_str());
+        auto headername = new Util::JsonArray();
+        getFieldName(ld->getOperand(0), headername);
+        result->emplace("field", headername);
         return result;
     }
     else if (auto bc = dyn_cast<BitCastInst>(inst)) {
@@ -80,7 +81,7 @@ Util::IJson* ParserConverter::getJsonExp(Value *inst) {
     }
 }
 
-// TODO(hanw) refactor this function
+
 Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
     auto result = new Util::JsonObject();
     auto params = mkArrayField(result, "parameters");
@@ -88,7 +89,8 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
         errs() << "processing store for parser-states\n" << *inst << "\n";
         auto assign = dyn_cast<StoreInst>(inst);
         cstring operation = "set";
-        std::string left_field = getFieldName(assign->getOperand(1)).substr(1);
+        auto left_field = new Util::JsonArray();
+        getFieldName(assign->getOperand(1), left_field);
         auto right = getJsonExp(assign->getOperand(0));
         if(dyn_cast<PointerType>(assign->getOperand(1)->getType())->getElementType()->isStructTy())
             operation = "assign_header";
@@ -156,9 +158,10 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
                 //     }
                 // }
                 // if (j == nullptr) {
-                    type = "regular";
-                    // j = conv->convert(arg->expression);
-                    cstring field = getFieldName(inst->getOperand(0)).substr(1).c_str();
+                type = "regular";
+                // j = conv->convert(arg->expression);
+                auto field = new Util::JsonArray();
+                getFieldName(inst->getOperand(0), field);
                 // }
                 // auto value = j->to<Util::JsonObject>()->get("value");
                 // auto value 

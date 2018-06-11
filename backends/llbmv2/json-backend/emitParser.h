@@ -58,13 +58,8 @@ class ParserConverter {
     // ParserConverter(LLBMV2::JsonObjects *json):json(json);
     Util::IJson* convertParserStatement(llvm::Instruction*);
     bool processParser(llvm::Function *F);
-    // bool isIndex1D(llvm::GetElementPtrInst *gep);
-    // std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep);
-    // unsigned get1DIndex(llvm::GetElementPtrInst *gep);
-    // std::string getFieldName(llvm::Value*);
     Util::IJson* getJsonExp(llvm::Value*);
     cstring getBinaryOperation(llvm::Value *);
-    // bool preorder(const IR::PackageBlock* b) override;
     explicit ParserConverter(LLBMV2::JsonObjects* json) : json(json){}
     // corelib(P4::P4CoreLibrary::instance) {}
 };

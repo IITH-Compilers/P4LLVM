@@ -46,7 +46,8 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call, cstring table_
             errs() << cont1->getAsString() << "\n";
             match = cont1->getAsString().str().c_str();
         }
-        auto key = getFieldName(apply_call->getOperand(arg+1));
+        auto key_arr = new Util::JsonArray();
+        auto key = getFieldName(apply_call->getOperand(arg+1), key_arr);
         keyMatches[key] = match;
 
         if (match != table_match_type) {
@@ -62,7 +63,7 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call, cstring table_
         }
         auto keyelement = new Util::JsonObject();
         keyelement->emplace("match_type", match);
-        keyelement->emplace("target", key);
+        keyelement->emplace("target", key_arr);
         keyelement->emplace("mask", Util::JsonValue::null);
         tkey->append(keyelement);
         
@@ -152,7 +153,9 @@ cstring ChecksumConverter::createCalculation(cstring algo, std::vector<Value*> a
     for(auto arg : args) {
         auto arg_obj = new Util::JsonObject();
         arg_obj->emplace("type", "field");
-        arg_obj->emplace("value", getFieldName(arg));
+        auto arg_obj_arr = new Util::JsonArray();
+        getFieldName(arg, arg_obj_arr);
+        arg_obj->emplace("value", arg_obj_arr);
         input->append(arg_obj);
     }
     calc->emplace("algo", algo);
@@ -203,8 +206,8 @@ void ChecksumConverter::processChecksum(Function *F) {
                                                 json->calculations, usePayload);
             cksum->emplace("name", genName("cksum_"));
             cksum->emplace("id", nextId("checksums"));
-            // TODO(jafingerhut) - add line/col here?
-            auto jleft = getFieldName(I->getOperand(I->getNumOperands()-2));
+            auto jleft = new Util::JsonArray();
+            getFieldName(I->getOperand(I->getNumOperands()-2), jleft);
             cksum->emplace("target", jleft);
             cksum->emplace("type", "generic");
             cksum->emplace("calculation", calcName);
@@ -219,7 +222,9 @@ void ChecksumConverter::processChecksum(Function *F) {
                         auto value = new Util::JsonObject();
                         value->emplace("op", "d2b");
                         value->emplace("left", Util::JsonValue::null);
-                        value->emplace("right", getFieldName(dyn_cast<Instruction>(bool_arg)->getOperand(0)));
+                        auto right_arr = new Util::JsonArray();
+                        getFieldName(dyn_cast<Instruction>(bool_arg)->getOperand(0), right_arr);
+                        value->emplace("right", right_arr);
                         ifcond->emplace("value", value);
                     }
             } else if(auto bool_const = dyn_cast<ConstantInt>(bool_arg)) {
