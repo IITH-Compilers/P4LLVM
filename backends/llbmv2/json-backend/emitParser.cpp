@@ -86,7 +86,7 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
     auto result = new Util::JsonObject();
     auto params = mkArrayField(result, "parameters");
     if (isa<StoreInst>(inst)) {
-        errs() << "processing store for parser-states\n" << *inst << "\n";
+        //errs() << "processing store for parser-states\n" << *inst << "\n";
         auto assign = dyn_cast<StoreInst>(inst);
         cstring operation = "set";
         auto left_field = new Util::JsonArray();
@@ -322,7 +322,7 @@ bool ParserConverter::processParser(llvm::Function *F) {
                        dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
                         trans->emplace("value", "default");
                     else {
-                        errs() << "\n" << dyn_cast<Value>(term->getSuccessor(s))->getName().str() << "\n";
+                        //errs() << "\n" << dyn_cast<Value>(term->getSuccessor(s))->getName().str() << "\n";
                         trans->emplace("value", switch_inst->findCaseDest(term->getSuccessor(s))->getSExtValue());
                     }
                     trans->emplace("mask", Util::JsonValue::null);

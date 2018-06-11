@@ -131,7 +131,7 @@ static unsigned get1DIndex(llvm::GetElementPtrInst *gep)
     for (auto id = gep->idx_begin(); id != gep->idx_end(); id++)
     {
         unsigned val = dyn_cast<ConstantInt>(id)->getZExtValue();
-        errs() << "1D index : " << val << "\n";
+        //errs() << "1D index : " << val << "\n";
         if (val != 0)
             return val;
     }
@@ -162,8 +162,8 @@ static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep, Util::Json
 
 std::string getFieldName(Value *arg, Util::JsonArray* fieldArr)
 {
-    errs() << "input inst is \n"
-           << *arg << "\n";
+    //errs() << "input inst is \n"
+        //    << *arg << "\n";
     if (!isa<Instruction>(arg))
         return "";
     if (isa<AllocaInst>(arg)) {
@@ -176,7 +176,7 @@ std::string getFieldName(Value *arg, Util::JsonArray* fieldArr)
     auto gep = dyn_cast<GetElementPtrInst>(arg);
     if (gep)
     {
-        errs() << "No of operands in gep : " << gep->getNumOperands() << "\n";
+        //errs() << "No of operands in gep : " << gep->getNumOperands() << "\n";
         if (isIndex1D(gep))
         {
             auto src_type = dyn_cast<StructType>(gep->getSourceElementType());
@@ -195,13 +195,13 @@ std::string getFieldName(Value *arg, Util::JsonArray* fieldArr)
 
     if (auto ld = dyn_cast<LoadInst>(arg))
     {
-        errs() << "No of operands in load : " << ld->getNumOperands() << "\n";
+        //errs() << "No of operands in load : " << ld->getNumOperands() << "\n";
         return getFieldName(ld->getOperand(0), fieldArr);
     }
 
     if (auto bc = dyn_cast<BitCastInst>(arg))
     {
-        errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
+        //errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
         assert(bc->getType()->isPointerTy() && "not a pointer type in getFieldName");
         return getFieldName(bc->getOperand(0), fieldArr);
     }
@@ -271,6 +271,26 @@ cstring genName(cstring name)
         genNameMap[name] = 0;
     }
     return name + std::to_string(genNameMap[name]++);
+}
+
+unsigned getActionID(cstring action)
+{
+    if(actionIDMap.find(action) != actionIDMap.end())
+        return actionIDMap[action];
+    else {
+        assert(false && "Action id not there in action map");
+    }
+    return 0;
+}
+
+void setActionID(cstring action, unsigned id)
+{
+    if (actionIDMap.find(action) == actionIDMap.end())
+        actionIDMap[action] = id;
+    else {
+        errs() << action << "\n";
+        assert(false && "setActionID called with same action more than once");
+    }
 }
 
 }  // namespace LLBMV2

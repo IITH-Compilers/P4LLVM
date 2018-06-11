@@ -182,7 +182,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			MDString *mdstr = dyn_cast<MDString>(header_md->getOperand(0)->getOperand(op));
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString())) {
-				errs() << st->getName() << " is of Header type\n";
+				//errs() << st->getName() << " is of Header type\n";
 				(*struct2Type)[st] = "header";
 				found = true;
 				break;
@@ -196,7 +196,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString()))
 			{
-				errs() << st->getName() << " is of struct type\n";
+				//errs() << st->getName() << " is of struct type\n";
 				(*struct2Type)[st] = "struct";
 				found = true;
 				break;
@@ -210,7 +210,7 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString()))
 			{
-				errs() << st->getName() << " is of header_union type\n";
+				//errs() << st->getName() << " is of header_union type\n";
 				(*struct2Type)[st] = "header_union";
 				found = true;
 				break;
@@ -264,12 +264,12 @@ bool JsonBackend::emitHeaders(Module &M) {
 	for(auto fn = M.begin(); fn != M.end(); fn++) {
 		Function *F = &*fn;
 		if(F->getAttributes().getFnAttributes().hasAttribute("parser")) {
-			errs() << "Found parser function\n";
+			//errs() << "Found parser function\n";
 			for(auto param = F->arg_begin(); param != F->arg_end(); param++) {
 				auto st = dyn_cast<StructType>(dyn_cast<PointerType>((&*param)->getType())->getElementType());
 				if (st != nullptr && (*struct2Type)[st] == "struct")
 				{
-					errs() << "Calling parser function\n";
+					//errs() << "Calling parser function\n";
 					ch.processParams(st, struct2Type, json);
 				}
 				else {

@@ -80,8 +80,11 @@ enum header_type
     Unknown
 };
 static std::map<cstring, unsigned> genNameMap;
+static std::map<cstring, unsigned> actionIDMap;
+
+void setActionID(cstring action, unsigned id);
+unsigned getActionID(cstring action);
 cstring genName(cstring name);
-// Util::IJson* nodeName(const CFG::Node* node);
 Util::JsonArray* mkArrayField(Util::JsonObject* parent, cstring name);
 Util::JsonArray* mkParameters(Util::JsonObject* object);
 Util::JsonArray* pushNewArray(Util::JsonArray* parent);

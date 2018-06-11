@@ -21,7 +21,7 @@ namespace LLBMV2 {
 
 Util::IJson *ConvertActions::getJsonExp(Value *inst)
 {
-    errs() << "inst into getJsonExp is\n" << *inst << "\n";
+    //errs() << "inst into getJsonExp is\n" << *inst << "\n";
     auto result = new Util::JsonObject();
     if (auto bo = dyn_cast<BinaryOperator>(inst))
     {
@@ -77,9 +77,9 @@ Util::IJson *ConvertActions::getJsonExp(Value *inst)
     }
     else if (auto cmp  = dyn_cast<ICmpInst>(inst))
     {
-        errs() << "number of operands in icmp are : " << cmp->getNumOperands() << "\n";
+        //errs() << "number of operands in icmp are : " << cmp->getNumOperands() << "\n";
         auto pred = CmpInst::getPredicateName(cmp->getSignedPredicate()).str();
-        errs() << "predicate name: " << pred << "\n";
+        //errs() << "predicate name: " << pred << "\n";
         cstring op;
         if(pred == "eq")
             op = "==";
@@ -112,7 +112,8 @@ Util::IJson *ConvertActions::getJsonExp(Value *inst)
     {
         std::stringstream stream;
         stream << std::hex << cnst->getSExtValue();
-        result->emplace("hexstr", stream.str().c_str());
+        result->emplace("type", "hexstr");
+        result->emplace("value", stream.str().c_str());
         return result;
     }
     else if (auto ld = dyn_cast<LoadInst>(inst))
@@ -175,18 +176,6 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             cstring operation;
             auto left_arr = new Util::JsonArray();
             auto left = getFieldName(assign->getOperand(1), left_arr).substr(1);
-            auto right = new Util::JsonObject();
-            auto right_val = getJsonExp(assign->getOperand(0));
-            auto right_param = getFieldName(assign->getOperand(0));
-            if(right_param.length() > 0 && isActionParam(right_param.substr(1))) {
-                auto id = getRuntimeID(right_param.substr(1));
-                right->emplace("type", "runtime_data");
-                right->emplace("value", id);
-            }
-            else {
-                right->emplace("type", "field");
-                right->emplace("value", right_val);
-            }
             if (getBasicHeaderType(left) == Union)
                 operation = "assign_union";
             else if (getBasicHeaderType(left) == Header)
@@ -200,7 +189,21 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             left_exp->emplace("type", "field");
             left_exp->emplace("value", left_arr);
             parameters->append(left_exp);
-            parameters->append(right);
+
+            auto right = new Util::JsonObject();
+            auto right_val = getJsonExp(assign->getOperand(0));
+            auto right_param = getFieldName(assign->getOperand(0));
+            if(right_param.length() > 0 && isActionParam(right_param.c_str())) {
+                auto id = getRuntimeID(right_param.c_str());
+                right->emplace("type", "runtime_data");
+                right->emplace("value", id);
+                parameters->append(right);
+            }
+            else {
+                // right->emplace("type", "field");
+                // right->emplace("value", right_val);
+                parameters->append(right_val);
+            }
             continue;
         }
         else if (isa<CallInst>(I))
@@ -244,27 +247,26 @@ ConvertActions::convertActionParams(Function *F, Util::JsonArray* params) {
     // If the code is optimized then no issue of allocas be happy :)
     for(auto inst = inst_begin(F); inst != inst_end(F); inst++) {
         if(auto st = dyn_cast<StoreInst>(&*inst)) {
-            unsigned paramCount = 0;
             if(!isAssignment(st)) {
-                errs() << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@store in convertActionParams : \n" << *st << "\n";
                 /// This store corresponds to a storing a parameter to a alloca
                 auto paramName = (F->getName() + "._" + dyn_cast<Argument>(st->getOperand(0))->getName()).str();
                 setAllocaName(dyn_cast<Instruction>(st->getOperand(1)), paramName);
-                setRuntimeID(paramName, paramCount++);
                 addToActionParamList(paramName);
             }
 
         }
     }
+
     for (auto p = F->arg_begin(); p != F->arg_end(); p++) {
-        // if (!refMap->isUsed(p))
-        //     ::warning("Unused action parameter %1%", p);
         Argument *arg = &*p;
         if(arg->getType()->isPointerTy())
             continue;
-        errs() << "######################################arg is : " << *arg << "\n";    
+        //errs() << "######################################arg is : " << *arg << "\n";    
         auto param = new Util::JsonObject();
         auto paramName = (F->getName() + "._" + arg->getName()).str();
+        errs() << "Paramcount is: " <<  p - F->arg_begin();
+        setRuntimeID(paramName,  p - F->arg_begin());
+        addToActionParamList(paramName);
         param->emplace("name", paramName);
         auto type = arg->getType();
         if ((type->isVectorTy() && type->getVectorElementType()->isIntegerTy(1)) ||
@@ -296,6 +298,8 @@ ConvertActions::processActions(Function *F) {
     auto body = new Util::JsonArray();
     convertActionBody(F, body);
     auto id = json->add_action(name, params, body);
+    setActionID(name, id);
+    actionParamList.clear();
         // backend->getStructure().ids.emplace(action, id);
 }
 

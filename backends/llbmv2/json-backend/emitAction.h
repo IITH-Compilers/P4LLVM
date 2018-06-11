@@ -29,35 +29,37 @@ namespace LLBMV2 {
 
 class ConvertActions {
     LLBMV2::JsonObjects*     json;
-    std::map<std::string, unsigned> actionParamMap;
-    std::vector<std::string> actionParamList;
+    std::map<cstring, unsigned> actionParamMap;
+    std::vector<cstring> actionParamList;
 
     void convertActionBody(llvm::Function *F, Util::JsonArray *body);
     void convertActionParams(llvm::Function *F, Util::JsonArray* params);
     Util::IJson* getJsonExp(llvm::Value *inst);
     bool isAssignment(llvm::StoreInst*);
-    unsigned getRuntimeID(std::string paramName) {
+    unsigned getRuntimeID(cstring paramName) {
         if(actionParamMap.find(paramName) == actionParamMap.end())
             assert(false && "Param not found");
         return actionParamMap[paramName];
     }
-    void setRuntimeID(std::string paramName, unsigned id) {
+    void setRuntimeID(cstring paramName, unsigned id) {
         if(actionParamMap.find(paramName) == actionParamMap.end())
             actionParamMap[paramName] = id;
-        else {
-            llvm::errs() << "ERROR : " << "Action param already exit in actionParamMap\n";
-            exit(1);
-        }
+        // else {
+        //     llvm::errs() << "ERROR : " << "Action param already exit in actionParamMap\n";
+        //     exit(1);
+        // }
             
     }
-    void addToActionParamList(std::string paramName) {
+    void addToActionParamList(cstring paramName) {
         if (std::find(actionParamList.begin(), actionParamList.end(), paramName)
             == actionParamList.end())
             actionParamList.push_back(paramName);
-        else
-            assert(false && "Param already exist in list");
+        llvm::errs() << "Action Param listed: " << paramName << "\n";
+        // else
+            // assert(false && "Param already exist in list");
     }
-    bool isActionParam(std::string paramName) {
+    bool isActionParam(cstring paramName) {
+        llvm::errs() << "Action param asked for: " << paramName << "\n";
         if (std::find(actionParamList.begin(), actionParamList.end(), paramName)
             != actionParamList.end())
             return true;
