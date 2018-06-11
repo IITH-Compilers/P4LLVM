@@ -117,9 +117,10 @@ Util::IJson *ConvertActions::getJsonExp(Value *inst)
     }
     else if (auto ld = dyn_cast<LoadInst>(inst))
     {
-        std::string headername = getFieldName(ld->getOperand(0)).substr(1);
+        auto headername = new Util::JsonArray();
+        getFieldName(ld->getOperand(0), headername);
         result->emplace("type", "field");
-        result->emplace("value", headername.c_str());
+        result->emplace("value", headername);
         return result;
     }
     else if (auto bc = dyn_cast<BitCastInst>(inst))
@@ -172,7 +173,8 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             if(!isAssignment(assign))
                 continue;
             cstring operation;
-            auto left = getFieldName(assign->getOperand(1)).substr(1);
+            auto left_arr = new Util::JsonArray();
+            auto left = getFieldName(assign->getOperand(1), left_arr).substr(1);
             auto right = new Util::JsonObject();
             auto right_val = getJsonExp(assign->getOperand(0));
             auto right_param = getFieldName(assign->getOperand(0));
@@ -196,7 +198,7 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             primitive->emplace("source_info", Util::JsonValue::null);
             auto left_exp = new Util::JsonObject();
             left_exp->emplace("type", "field");
-            left_exp->emplace("value", left);
+            left_exp->emplace("value", left_arr);
             parameters->append(left_exp);
             parameters->append(right);
             continue;
@@ -208,7 +210,8 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             int argCount = call->getFunctionType()->getFunctionNumParams();
             cstring prim;
             auto parameters = new Util::JsonArray();
-            auto obj = getFieldName(I->getOperand(0)).substr(1).c_str();
+            auto obj = new Util::JsonArray();
+            getFieldName(I->getOperand(0), obj);
             parameters->append(obj);
             if(callName.contains("setValid") || callName.contains("setInvalid")) {
                 if (callName == "setValid")

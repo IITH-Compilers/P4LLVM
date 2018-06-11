@@ -1,7 +1,7 @@
 /*
 IITH Compilers
-authors = D Tharun, S Venkata
-email = {cs15mtech11002, cs17mtech11018}@iith.ac.in
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

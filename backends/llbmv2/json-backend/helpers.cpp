@@ -138,7 +138,7 @@ static unsigned get1DIndex(llvm::GetElementPtrInst *gep)
     return 0;
 }
 
-static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep)
+static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep, Util::JsonArray* fieldArr)
 {
     auto id = gep->idx_begin();
     id++; // ignore the first index as it will be a zero corresponding to the current type
@@ -147,8 +147,12 @@ static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep)
     for (; id != gep->idx_end(); id++)
     {
         unsigned val = dyn_cast<ConstantInt>(id)->getZExtValue();
-        if (isa<StructType>(src_type))
-            result = result + dyn_cast<StructType>(src_type)->getName().str() + ".field_" + std::to_string(val) + ".";
+        if (isa<StructType>(src_type)) {
+            auto interimName = dyn_cast<StructType>(src_type)->getName().str() + ".field_" + std::to_string(val);
+            if(fieldArr)
+                fieldArr->append(interimName);
+            result = result + interimName + ".";
+        }
         else
             assert(false && "This should not happen");
         src_type = dyn_cast<StructType>(src_type)->getElementType(val);
@@ -156,14 +160,19 @@ static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep)
     return result.substr(0, result.length() - 2);
 }
 
-std::string getFieldName(Value *arg)
+std::string getFieldName(Value *arg, Util::JsonArray* fieldArr)
 {
     errs() << "input inst is \n"
            << *arg << "\n";
     if (!isa<Instruction>(arg))
         return "";
-    if (isa<AllocaInst>(arg))
-        return "." + getAllocaName(dyn_cast<Instruction>(arg));
+    if (isa<AllocaInst>(arg)) {
+        auto retName = getAllocaName(dyn_cast<Instruction>(arg));
+        if(fieldArr)
+            fieldArr->append(retName);
+        return retName;
+    }
+
     auto gep = dyn_cast<GetElementPtrInst>(arg);
     if (gep)
     {
@@ -172,26 +181,29 @@ std::string getFieldName(Value *arg)
         {
             auto src_type = dyn_cast<StructType>(gep->getSourceElementType());
             assert(src_type != nullptr && "This should not happen");
-            return getFieldName(gep->getPointerOperand()) + "." + src_type->getName().str() + ".field_" + std::to_string(get1DIndex(gep));
+            auto retName = getFieldName(gep->getPointerOperand(), fieldArr) + "." + src_type->getName().str() + ".field_" + std::to_string(get1DIndex(gep));
+            if(fieldArr)
+                fieldArr->append(src_type->getName().str() + ".field_" + std::to_string(get1DIndex(gep)));
+            return retName;
         }
         else
         {
-            std::string result = getMultiDimFieldName(gep);
-            return result + getFieldName(gep->getPointerOperand());
+            std::string result = getMultiDimFieldName(gep, fieldArr);
+            return result + getFieldName(gep->getPointerOperand(), fieldArr);
         }
     }
 
     if (auto ld = dyn_cast<LoadInst>(arg))
     {
         errs() << "No of operands in load : " << ld->getNumOperands() << "\n";
-        return getFieldName(ld->getOperand(0));
+        return getFieldName(ld->getOperand(0), fieldArr);
     }
 
     if (auto bc = dyn_cast<BitCastInst>(arg))
     {
         errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
         assert(bc->getType()->isPointerTy() && "not a pointer type in getFieldName");
-        return getFieldName(bc->getOperand(0));
+        return getFieldName(bc->getOperand(0), fieldArr);
     }
 }
 
