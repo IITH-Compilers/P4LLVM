@@ -44,21 +44,19 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call, cstring table_
             auto cont = dyn_cast<GlobalVariable>(apply_call->getOperand(arg));
             auto cont1 = dyn_cast<ConstantDataArray>(cont->getInitializer());
             errs() << cont1->getAsString() << "\n";
-            match = cont1->getAsString();
+            match = cont1->getAsString().str().c_str();
         }
         auto key = getFieldName(apply_call->getOperand(arg+1));
-        errs() << "table match : " << table_match_type << "\ntable_type : " << match << "\n";
         keyMatches[key] = match;
-        if (match.compare(table_match_type) != 0) {
-            if (match.compare("range")  == 0)
+
+        if (match != table_match_type) {
+            if (match == "range")
                 table_match_type = "range";
-            if (match.compare("ternary") == 0 &&
-                table_match_type.compare("range") != 0)
+            if (match == "ternary" && table_match_type != "range")
                 table_match_type = "ternary";
-            if (match.compare("lpm") == 0 &&
-                table_match_type.compare("exact") == 0)
+            if (match == "lpm" && table_match_type == "exact")
                 table_match_type = "lpm";
-        } else if (match.compare("lpm") == 0) {
+        } else if (match == "lpm") {
             errs() << "Multiple LPM keys in table\n";
             exit(1);
         }
@@ -132,7 +130,7 @@ void ControlConverter::processControl(Function* F) {
     for(auto cinst : *apply_calls) {
         auto ret = convertTable(cinst, table_name);
         tables->append(ret);
-        table_name = genName("table");
+        table_name = genName("table_");
     }
     // Addition of action_profiles
     auto action_profiles = mkArrayField(pipeline, "action_profiles");
