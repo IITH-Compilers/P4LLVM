@@ -983,10 +983,10 @@ void ToIR::convertTable(const IR::P4Table* table) {
         auto name = action->controlPlaneName();
 
         Function* fn = backend->action_function[name];
-        auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
-        backend->Builder.CreateStore(fn, alloca);
-        arg.push_back(alloca->getType());
-        param.push_back(alloca);
+        // auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
+        // backend->Builder.CreateStore(fn, alloca);
+        arg.push_back(fn->getType());
+        param.push_back(fn);
     }
 
       Value* sizeVal;
@@ -1042,10 +1042,10 @@ void ToIR::convertTable(const IR::P4Table* table) {
         }
 
         Function* fn = backend->action_function[action->controlPlaneName()];
-        auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
-        backend->Builder.CreateStore(fn, alloca);
-        arg.push_back(alloca->getType());
-        param.push_back(alloca);
+        // auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
+        // backend->Builder.CreateStore(fn, alloca);
+        arg.push_back(fn->getType());
+        param.push_back(fn);
         //add metadata to check const; defact->isConstant 
         // entry->emplace("action_entry_const", defact->isConstant);
     }

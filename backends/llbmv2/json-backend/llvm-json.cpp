@@ -34,6 +34,7 @@ public:
 		cd = new LLBMV2::ConvertDeparser(json);
 		ca = new LLBMV2::ConvertActions(json);
 		cc = new LLBMV2::ChecksumConverter(json);
+		conc = new LLBMV2::ControlConverter(json);
 	}
 
 	~JsonBackend() {
@@ -41,6 +42,7 @@ public:
 		delete pc;
 		delete cd;
 		delete cc;
+		delete conc;
 	}
 
 	virtual bool runOnModule(Module &M) {
@@ -61,6 +63,7 @@ public:
 		emitDeparser(M);
 		emitActions(M);
 		emitChecksum(M);
+		emitControlBlock(M);
 		printJsonToFile(M.getSourceFileName()+".ll.json");
 		return false;
 	}
@@ -70,6 +73,7 @@ public:
 	void emitDeparser(Module &M);
 	void emitActions(Module &M);
 	void emitChecksum(Module &M);
+	void emitControlBlock(Module &M);
 
   private:
 	Util::JsonObject jsonTop;
@@ -92,12 +96,22 @@ public:
 	LLBMV2::ConvertDeparser *cd;
 	LLBMV2::ConvertActions *ca;
 	LLBMV2::ChecksumConverter *cc;
+	LLBMV2::ControlConverter *conc;
 	void printJsonToFile(const std::string fn);
 	std::map<llvm::StructType *, std::string> *struct2Type;
 };
 }
 
 char JsonBackend::ID = 0;
+
+void JsonBackend::emitControlBlock(Module &M) {
+	for (auto fn = M.begin(); fn != M.end(); fn++) {
+		if ((&*fn)->getAttributes().getFnAttributes().hasAttribute("ingress") ||
+		   (&*fn)->getAttributes().getFnAttributes().hasAttribute("egress")) {
+			conc->processControl((&*fn));
+		}
+	}	
+}
 
 void JsonBackend::emitChecksum(Module &M) {
 	for (auto fn = M.begin(); fn != M.end(); fn++) {
