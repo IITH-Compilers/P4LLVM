@@ -21,7 +21,9 @@ limitations under the License.
 using namespace llvm;
 namespace LLBMV2 {
 
-Util::IJson* ControlConverter::convertTable(CallInst *apply_call, cstring table_name) {
+Util::IJson* ControlConverter::convertTable(CallInst *apply_call,
+                                            cstring table_name,
+                                            cstring nex_table_name) {
     auto table = new Util::JsonObject();
     table->emplace("name", table_name);
     table->emplace("id", nextId("tables"));
@@ -110,7 +112,6 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call, cstring table_
     if (apply_call->getOperand(actionsPtrStartIdx)->getType()->isPointerTy() &&
         isa<Function>(apply_call->getOperand(actionsPtrStartIdx))) {
         auto fun = dyn_cast<Function>(apply_call->getOperand(actionsPtrStartIdx));
-        // errs() << *apply_call->getOperand(actionsPtrStartIdx) << "\n";
         default_action = fun->getName().str();
     } else
         assert(false && "No default action");
@@ -126,14 +127,28 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call, cstring table_
     default_entry->emplace("action_data", new Util::JsonArray());
     default_entry->emplace("action_entry_const", false);
 
+    // code for next_tables
+    auto next_tables = new Util::JsonObject();
+    if(nex_table_name != cstring::empty)
+        for(auto act : actionVector) {
+            next_tables->emplace(act, nex_table_name);
+        }
+    else
+        for(auto act : actionVector) {
+            next_tables->emplace(act, Util::JsonValue::null);
+        }
+
     table->emplace("max_size", table_size);
     table->emplace("with_counters", false);
     table->emplace("support_timeout", false);
     table->emplace("direct_meters", Util::JsonValue::null);
     table->emplace("action_ids", action_ids);
     table->emplace("actions", action_names);
-    table->emplace("base_default_next", Util::JsonValue::null);
-    table->emplace("next_tables", Util::JsonValue::null);
+    if (nex_table_name == cstring::empty)
+        table->emplace("base_default_next", Util::JsonValue::null);
+    else
+        table->emplace("base_default_next", nex_table_name);
+    table->emplace("next_tables", next_tables);
     table->emplace("default_entry", default_entry);
     return table;
 }
@@ -149,20 +164,26 @@ void ControlConverter::processControl(Function* F) {
             if(cinst->getCalledFunction()->getName().contains("apply"))
                 apply_calls->push_back(cinst);
     }
-    cstring table_name;
+    cstring cur_table_name, nex_table_name;
     if(apply_calls->size() == 0) {
         pipeline->emplace("init_table", Util::JsonValue::null);
     }
     else {
-        table_name = genName("table_");
-        pipeline->emplace("init_table", table_name);
+        cur_table_name = genName("table_");
+        pipeline->emplace("init_table", cur_table_name);
     }
     // Addition of tables start here
     auto tables = mkArrayField(pipeline, "tables");
-    for(auto cinst : *apply_calls) {
-        auto ret = convertTable(cinst, table_name);
+    for(auto cinst = apply_calls->begin(); cinst != apply_calls->end(); cinst++) {
+        Util::IJson* ret;
+        if((cinst+1) == apply_calls->end()) {
+            ret = convertTable(*cinst, cur_table_name, cstring::empty);
+        } else {
+            nex_table_name = genName("table_");
+            ret = convertTable(*cinst, cur_table_name, nex_table_name);
+        }
         tables->append(ret);
-        table_name = genName("table_");
+        cur_table_name = nex_table_name;
     }
     // Addition of action_profiles
     auto action_profiles = mkArrayField(pipeline, "action_profiles");

@@ -34,7 +34,9 @@ namespace LLBMV2 {
 class ControlConverter {
     LLBMV2::JsonObjects* json;
  
- Util::IJson* convertTable(llvm::CallInst *apply_call, cstring table_name);
+ Util::IJson* convertTable(llvm::CallInst *apply_call,
+                            cstring cur_table_name,
+                            cstring nex_table_name);
  public:
     void processControl(llvm::Function* F);
     explicit ControlConverter(LLBMV2::JsonObjects* j) : json(j) {}
