@@ -242,7 +242,8 @@ public:
         void *handle;
         llvm::ModulePass *(*JsonBackend)();
         char *error;
-        handle = dlopen("./backends/llbmv2/json-backend/libLLVMJsonBackend.so", RTLD_LAZY);
+        // handle = dlopen("./backends/llbmv2/json-backend/libLLVMJsonBackend.so", RTLD_LAZY);
+        handle = dlopen(options.bpath, RTLD_LAZY);
         if (!handle) {
             // fputs(dlerror(), stderr);
             std::cerr << dlerror() << std::endl;

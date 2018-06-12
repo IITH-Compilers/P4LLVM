@@ -27,7 +27,9 @@ enum class Target { UNKNOWN, PORTABLE, SIMPLE };
 class BMV2Options : public CompilerOptions {
  public:
     LLBMV2::Target arch = LLBMV2::Target::UNKNOWN;
-    BMV2Options() {
+    const char* bpath = "./backends/llbmv2/json-backend/libLLVMJsonBackend.so";
+    BMV2Options()
+    {
         registerOption("--arch", "arch",
                        [this](const char* arg) {
                         if (!strcmp(arg, "psa")) {
@@ -39,6 +41,12 @@ class BMV2Options : public CompilerOptions {
                         }
                         return true; },
                        "Compile for the specified architecture (psa or ss), default is ss.");
+        registerOption("--bpath", "bpath",
+                       [this](const char *arg) {
+                           bpath = arg;
+                           return true;
+                       },
+                       "provide path to libLLVMJsonBackend.so (default: build/backends/llbmv2/json-backend/libLLVMJsonBackend.so)");
      }
 };
 
