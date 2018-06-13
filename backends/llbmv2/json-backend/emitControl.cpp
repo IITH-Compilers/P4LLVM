@@ -31,7 +31,7 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call,
     std::string table_match_type = "exact";
     auto tkey = mkArrayField(table, "key");
     std::vector<std::string> keys;
-    std::map<std::string, std::string> keyMatches;
+    // std::map<std::string, std::string> keyMatches;
     //errs() << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
     //errs() << "Function Name : " << apply_call->getCalledFunction()->getName() << "\n";
     unsigned actionsPtrStartIdx;
@@ -50,7 +50,7 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call,
         }
         auto key_arr = new Util::JsonArray();
         auto key = getFieldName(apply_call->getOperand(arg+1), key_arr);
-        keyMatches[key] = match;
+        // keyMatches[key] = match;
 
         if (match != table_match_type) {
             if (match == "range")

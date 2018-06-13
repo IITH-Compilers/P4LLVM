@@ -160,8 +160,9 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
                 // if (j == nullptr) {
                 type = "regular";
                 // j = conv->convert(arg->expression);
-                auto field = new Util::JsonArray();
-                getFieldName(inst->getOperand(0), field);
+                // auto field = new Util::JsonArray();
+                // getFieldName(inst->getOperand(0), field);
+                auto field = getFieldName(inst->getOperand(0)).substr(1);
                 // }
                 // auto value = j->to<Util::JsonObject>()->get("value");
                 // auto value 
@@ -316,30 +317,18 @@ bool ParserConverter::processParser(llvm::Function *F) {
         unsigned successors = term->getNumSuccessors();
         if(successors > 1) {
             if(auto switch_inst = dyn_cast<SwitchInst>(term)) {
-            //    for(unsigned s = 0; s < successors; s++) {
-            //        auto trans = new Util::JsonObject();
-            //        if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
-            //            dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
-            //             trans->emplace("value", "default");
-            //         else {
-            //             //errs() << "\n" << dyn_cast<Value>(term->getSuccessor(s))->getName().str() << "\n";
-            //             trans->emplace("value", switch_inst->findCaseDest(term->getSuccessor(s))->getZExtValue());
-            //         }
-            //         trans->emplace("mask", Util::JsonValue::null);
-            //         if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
-            //             dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
-            //             trans->emplace("next_state", Util::JsonValue::null);
-            //         else
-            //             trans->emplace("next_state", term->getSuccessor(s)->getName().str());
-            //         json->add_parser_transition(state_id, trans);
-            //    }
                 for(unsigned s = 0; s < successors; s++) {
                     auto trans = new Util::JsonObject();
                     BasicBlock* def_bb = switch_inst->getDefaultDest();
                     if(def_bb == term->getSuccessor(s))
                         trans->emplace("value", "default");
-                    else
-                        trans->emplace("value", switch_inst->findCaseDest(term->getSuccessor(s))->getZExtValue());
+                    else {
+                        std::stringstream stream;
+                        stream << "0x" << std::setfill('0') << std::setw(switch_inst->findCaseDest(term->getSuccessor(s))->getBitWidth()/4) << std::hex
+                               << switch_inst->findCaseDest(term->getSuccessor(s))->getZExtValue();
+                        std::string result(stream.str());
+                        trans->emplace("value", result.c_str());
+                    }
                     trans->emplace("mask", Util::JsonValue::null);
                     if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
                         dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
@@ -348,10 +337,14 @@ bool ParserConverter::processParser(llvm::Function *F) {
                         trans->emplace("next_state", term->getSuccessor(s)->getName().str().c_str());
                     json->add_parser_transition(state_id, trans);
                 }
-               auto transition_key = new Util::JsonArray();
-               getFieldName(switch_inst->getCondition(), transition_key);
-               json->add_parser_transition_key(state_id, transition_key);
+               auto transition_key_arr = new Util::JsonArray();
+               errs() << "trans key: " <<getFieldName(switch_inst->getCondition(), transition_key_arr) << "\n";
+               auto transition_key = new Util::JsonObject();
+               transition_key->emplace("type", "field");
+               transition_key->emplace("value", transition_key_arr);
+               json->add_parser_transition_key(state_id, (new Util::JsonArray())->append(transition_key));
             } else if(BranchInst* cond_branch = dyn_cast<BranchInst>(term)) {
+                errs() << "conditional branch \n" << *cond_branch << "\n";
                 if(cond_branch->isConditional()) {
                     Value *cond = cond_branch->getCondition();
                     if(auto icmp = dyn_cast<ICmpInst>(cond)) {
@@ -367,6 +360,10 @@ bool ParserConverter::processParser(llvm::Function *F) {
                                 assert(false && "non-const value in switch case, should not happen");
                                 return false;
                             }
+                            std::stringstream stream;
+                            stream << "0x" << std::setfill('0') << std::setw(dyn_cast<ConstantInt>(icmp->getOperand(1))->getBitWidth()/4) << std::hex
+                                   << jmpVal;
+                            std::string jmpVal_hex(stream.str());
                             if (dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "accept" ||
                                 dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "reject") {
                                 auto trans1 = new Util::JsonObject();
@@ -376,7 +373,7 @@ bool ParserConverter::processParser(llvm::Function *F) {
                                 json->add_parser_transition(state_id, trans1);
 
                                 auto trans2 = new Util::JsonObject();
-                                trans2->emplace("value", jmpVal);
+                                trans2->emplace("value", jmpVal_hex);
                                 trans2->emplace("mask", Util::JsonValue::null);
                                 auto next_state = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
                                 trans2->emplace("next_state", next_state);
@@ -390,7 +387,7 @@ bool ParserConverter::processParser(llvm::Function *F) {
                                 json->add_parser_transition(state_id, trans1);
 
                                 auto trans2 = new Util::JsonObject();
-                                trans2->emplace("value", jmpVal);
+                                trans2->emplace("value", jmpVal_hex);
                                 trans2->emplace("mask", Util::JsonValue::null);
                                 auto next_state = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
                                 trans2->emplace("next_state", next_state);
@@ -410,9 +407,12 @@ bool ParserConverter::processParser(llvm::Function *F) {
                         return false;
                     }
                 }
-                auto transition_key = new Util::JsonArray();
-                getFieldName(cond_branch->getCondition(), transition_key);
-                json->add_parser_transition_key(state_id, transition_key);
+                auto transition_key_arr = new Util::JsonArray();
+                getFieldName(cond_branch->getCondition(), transition_key_arr);
+                auto transition_key = new Util::JsonObject();
+                transition_key->emplace("type", "field");
+                transition_key->emplace("value", transition_key_arr);
+                json->add_parser_transition_key(state_id,  (new Util::JsonArray())->append(transition_key));
             }
             else {
                 assert(false && "Never come here");

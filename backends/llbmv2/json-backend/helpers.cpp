@@ -160,7 +160,7 @@ static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep, Util::Json
     return result.substr(0, result.length() - 2);
 }
 
-std::string getFieldName(Value *arg, Util::JsonArray* fieldArr)
+cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
 {
     //errs() << "input inst is \n"
         //    << *arg << "\n";
@@ -181,9 +181,18 @@ std::string getFieldName(Value *arg, Util::JsonArray* fieldArr)
         {
             auto src_type = dyn_cast<StructType>(gep->getSourceElementType());
             assert(src_type != nullptr && "This should not happen");
-            auto retName = getFieldName(gep->getPointerOperand(), fieldArr) + "." + src_type->getName().str() + ".field_" + std::to_string(get1DIndex(gep));
+            auto retName = getFieldName(gep->getPointerOperand(), fieldArr) + "." + src_type->getName().str().c_str() + ".field_" + std::to_string(get1DIndex(gep)).c_str();
+            // standard_metadata is always 1D gep
+            if(isSMeta(retName.substr(1))) {
+                retName = getFromMetaMap(retName.substr(1));
+                if (fieldArr) {
+                    fieldArr->append("standard_metadata");
+                    fieldArr->append(retName);
+                }
+                return retName;
+            }
             if(fieldArr)
-                fieldArr->append(src_type->getName().str() + ".field_" + std::to_string(get1DIndex(gep)));
+                fieldArr->append(src_type->getName().str().c_str() + cstring(".field_") + std::to_string(get1DIndex(gep)).c_str());
             return retName;
         }
         else
@@ -293,6 +302,45 @@ void setActionID(cstring action, unsigned id)
     }
 }
 
+void insertInMetaMap(){
+    // if(metaMap.find(name) == metaMap.end())
+    //     metaMap[name] = meta_name;
+    // else
+    //     assert(false && "Name alredy exists in metaMap");
+    metaMap["struct.standard_metadata_t.field_0"] = "ingress_port";
+    metaMap["struct.standard_metadata_t.field_1"] = "egress_spec";
+    metaMap["struct.standard_metadata_t.field_2"] = "egress_port";
+    metaMap["struct.standard_metadata_t.field_3"] = "clone_spec";
+    metaMap["struct.standard_metadata_t.field_4"] = "instance_type";
+    metaMap["struct.standard_metadata_t.field_5"] = "drop";
+    metaMap["struct.standard_metadata_t.field_6"] = "recirculate_port";
+    metaMap["struct.standard_metadata_t.field_7"] = "packet_length";
+    metaMap["struct.standard_metadata_t.field_8"] = "enq_timestamp";
+    metaMap["struct.standard_metadata_t.field_9"] = "enq_qdepth";
+    metaMap["struct.standard_metadata_t.field_10"] = "deq_timedelta";
+    metaMap["struct.standard_metadata_t.field_11"] = "deq_qdepth";
+    metaMap["struct.standard_metadata_t.field_12"] = "ingress_global_timestamp";
+    metaMap["struct.standard_metadata_t.field_13"] = "lf_field_list";
+    metaMap["struct.standard_metadata_t.field_14"] = "mcast_grp";
+    metaMap["struct.standard_metadata_t.field_15"] = "resubmit_flag";
+    metaMap["struct.standard_metadata_t.field_16"] = "egress_rid";
+    metaMap["struct.standard_metadata_t.field_17"] = "checksum_error";
+    metaMap["struct.standard_metadata_t.field_18"] = "_padding";
+}
+
+cstring getFromMetaMap(cstring name)
+{
+    if(metaMap.find(name) != metaMap.end())
+        return metaMap[name];
+    else
+        return name;
+        // assert(false && "Name doesn't exit in metaMap");
+}
+
+bool isSMeta(cstring name) {
+    if (metaMap.find(name) != metaMap.end())
+        return true;
+    else return false;
+}
+
 }  // namespace LLBMV2
-
-

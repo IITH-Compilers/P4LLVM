@@ -31,7 +31,7 @@ Util::JsonArray* ConvertHeaders::pushNewArray(Util::JsonArray* parent) {
 }
 
 ConvertHeaders::ConvertHeaders(){
-    // setName("ConvertHeaders");
+    insertInMetaMap();
 }
 
 /**
@@ -200,6 +200,9 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
 {
     // cstring name = st->controlPlaneName();
     cstring name = (cstring)st->getName();
+    if(name == "struct.standard_metadata_t")
+        name = "standard_metadata";
+
     auto fields = new Util::JsonArray();
     unsigned max_length = 0;  // for variable-sized headers
     bool varbitFound = false;
@@ -231,23 +234,22 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
             exit(1);
         } else if (f->isIntegerTy(1)) { // Bool Type
             auto field = pushNewArray(fields);
-            field->append(st->getName().str()
-                            + ".field_" + std::to_string(fieldCount++));
+            auto name = st->getName().str() + ".field_" + std::to_string(fieldCount++);
+            field->append(name);
             field->append(boolWidth);
             field->append(false);
             max_length += boolWidth;
         } else if (f->isIntegerTy()) { // Integet Type
             auto field = pushNewArray(fields);
-            field->append(st->getName().str()
-                            + ".field_" + std::to_string(fieldCount++));
+            auto name = st->getName().str() + ".field_" + std::to_string(fieldCount++);
+            field->append(name);
             field->append(f->getIntegerBitWidth());
             field->append(true);
             max_length += f->getIntegerBitWidth();
-        // } else if (f->isArrayTy() && f->getArrayElementType()->isIntegerTy(1)) { // bits<> Type : is considerd as Array of 1 bits
         } else if (f->isVectorTy() && f->getVectorElementType()->isIntegerTy(1)) { // bits<> Type : is considerd as Array of 1 bits
             auto field = pushNewArray(fields);
-            field->append(st->getName().str()
-                            + ".field_" + std::to_string(fieldCount++));
+            auto name = (cstring)(st->getName().str() + ".field_" + std::to_string(fieldCount++));
+            field->append(getFromMetaMap(name));
             field->append(f->getVectorNumElements());
             field->append(false);
             max_length += f->getVectorNumElements();
@@ -383,7 +385,7 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
     // always-have metadata instance
     // json->add_metadata(scalarsTypeName, scalarsName);
     json->add_metadata(scalarsTypeName, "scalars");
-    json->add_metadata("standard_metadata_t", "standard_metadata");
+    json->add_metadata("standard_metadata", "standard_metadata");
     // return Inspector::init_apply(node);
 }
 

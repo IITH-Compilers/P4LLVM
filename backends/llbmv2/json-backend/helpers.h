@@ -72,6 +72,7 @@ class V1ModelProperties {
 // using BlockTypeMap = std::map<const IR::Block*, const IR::Type*>;
 static std::map<llvm::Instruction *, std::string> allocaMap;
 static std::map<cstring ,cstring> headerMap[3];
+static std::map<cstring, cstring> metaMap;
 enum header_type
 {
     Scalar,
@@ -94,10 +95,13 @@ bool setAllocaName(llvm::Instruction *I, std::string name);
 static bool isIndex1D(llvm::GetElementPtrInst *gep);
 static unsigned get1DIndex(llvm::GetElementPtrInst *gep);
 static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep, Util::JsonArray* f = nullptr);
-std::string getFieldName(llvm::Value *arg, Util::JsonArray* f = nullptr);
+cstring getFieldName(llvm::Value *arg, Util::JsonArray *f = nullptr);
 cstring getHeaderType(cstring, header_type ht);
 bool setHeaderType(cstring name, cstring type, header_type ht);
 header_type getBasicHeaderType(cstring);
+void insertInMetaMap();
+bool isSMeta(cstring);
+cstring getFromMetaMap(cstring);
 
 
 // cstring stringRepr(mpz_class value, unsigned bytes = 0);

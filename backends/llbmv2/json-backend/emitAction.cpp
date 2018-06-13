@@ -193,7 +193,7 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             auto right = new Util::JsonObject();
             auto right_val = getJsonExp(assign->getOperand(0));
             auto right_param = getFieldName(assign->getOperand(0));
-            if(right_param.length() > 0 && isActionParam(right_param.c_str())) {
+            if(strlen(right_param) > 0 && isActionParam(right_param.c_str())) {
                 auto id = getRuntimeID(right_param.c_str());
                 right->emplace("type", "runtime_data");
                 right->emplace("value", id);
@@ -213,9 +213,6 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             int argCount = call->getFunctionType()->getFunctionNumParams();
             cstring prim;
             auto parameters = new Util::JsonArray();
-            auto obj = new Util::JsonArray();
-            getFieldName(I->getOperand(0), obj);
-            parameters->append(obj);
             if(callName.contains("setValid") || callName.contains("setInvalid")) {
                 if (callName == "setValid")
                 {
@@ -225,7 +222,12 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
                 {
                     prim = "remove_header";
                 }
+                auto obj = new Util::JsonArray();
+                getFieldName(I->getOperand(0), obj);
+                parameters->append(obj);
 
+            } else if (callName.contains("mark_to_drop")) {
+                prim = "drop";
             }
             auto primitive = mkPrimitive(prim, result);
             primitive->emplace("parameters", parameters);
