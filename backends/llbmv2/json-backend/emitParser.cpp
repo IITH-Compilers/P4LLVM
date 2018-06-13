@@ -316,23 +316,38 @@ bool ParserConverter::processParser(llvm::Function *F) {
         unsigned successors = term->getNumSuccessors();
         if(successors > 1) {
             if(auto switch_inst = dyn_cast<SwitchInst>(term)) {
-               for(unsigned s = 0; s < successors; s++) {
-                   auto trans = new Util::JsonObject();
-                   if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
-                       dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
+            //    for(unsigned s = 0; s < successors; s++) {
+            //        auto trans = new Util::JsonObject();
+            //        if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
+            //            dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
+            //             trans->emplace("value", "default");
+            //         else {
+            //             //errs() << "\n" << dyn_cast<Value>(term->getSuccessor(s))->getName().str() << "\n";
+            //             trans->emplace("value", switch_inst->findCaseDest(term->getSuccessor(s))->getZExtValue());
+            //         }
+            //         trans->emplace("mask", Util::JsonValue::null);
+            //         if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
+            //             dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
+            //             trans->emplace("next_state", Util::JsonValue::null);
+            //         else
+            //             trans->emplace("next_state", term->getSuccessor(s)->getName().str());
+            //         json->add_parser_transition(state_id, trans);
+            //    }
+                for(unsigned s = 0; s < successors; s++) {
+                    auto trans = new Util::JsonObject();
+                    BasicBlock* def_bb = switch_inst->getDefaultDest();
+                    if(def_bb == term->getSuccessor(s))
                         trans->emplace("value", "default");
-                    else {
-                        //errs() << "\n" << dyn_cast<Value>(term->getSuccessor(s))->getName().str() << "\n";
+                    else
                         trans->emplace("value", switch_inst->findCaseDest(term->getSuccessor(s))->getZExtValue());
-                    }
                     trans->emplace("mask", Util::JsonValue::null);
                     if (dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "accept" ||
                         dyn_cast<Value>(term->getSuccessor(s))->getName().str() == "reject")
                         trans->emplace("next_state", Util::JsonValue::null);
                     else
-                        trans->emplace("next_state", term->getSuccessor(s)->getName().str());
+                        trans->emplace("next_state", term->getSuccessor(s)->getName().str().c_str());
                     json->add_parser_transition(state_id, trans);
-               }
+                }
                auto transition_key = new Util::JsonArray();
                getFieldName(switch_inst->getCondition(), transition_key);
                json->add_parser_transition_key(state_id, transition_key);
