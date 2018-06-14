@@ -17,7 +17,7 @@ limitations under the License.
 #include "helpers.h"
 
 using namespace llvm;
-namespace LLBMV2 {
+namespace LLVMJsonBackend {
 
 /// constant definition for LLBMV2
 // const cstring TableImplementation::actionProfileName = "action_profile";
@@ -65,26 +65,6 @@ Util::JsonObject* mkPrimitive(cstring name, Util::JsonArray* appendTo) {
     appendTo->append(result);
     return result;
 }
-
-// cstring stringRepr(mpz_class value, unsigned bytes) {
-//     cstring sign = "";
-//     const char* r;
-//     cstring filler = "";
-//     if (value < 0) {
-//         value =- value;
-//         r = mpz_get_str(nullptr, 16, value.get_mpz_t());
-//         sign = "-";
-//     } else {
-//         r = mpz_get_str(nullptr, 16, value.get_mpz_t());
-//     }
-
-//     if (bytes > 0) {
-//         int digits = bytes * 2 - strlen(r);
-//         BUG_CHECK(digits >= 0, "Cannot represent %1% on %2% bytes", value, bytes);
-//         filler = std::string(digits, '0');
-//     }
-//     return sign + "0x" + filler + r;
-// }
 
 unsigned nextId(cstring group) {
     static std::map<cstring, unsigned> counters;

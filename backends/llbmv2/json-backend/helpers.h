@@ -29,7 +29,7 @@ limitations under the License.
 // #include "../analyzer.h"
 // #include "frontends/common/model.h"
 
-namespace LLBMV2 {
+namespace LLVMJsonBackend {
 
 /// constant used in LLBMV2 backend code generation
 // class TableImplementation {
@@ -57,15 +57,15 @@ namespace LLBMV2 {
 //     static const cstring metersName;
 // };
 
-class V1ModelProperties {
- public:
-    static const cstring jsonMetadataParameterName;
+// class V1ModelProperties {
+//  public:
+//     static const cstring jsonMetadataParameterName;
 
-    /// The name of BMV2's valid field. This is a hidden bit<1> field
-    /// automatically added by BMV2 to all header types; reading from it tells
-    /// you whether the header is valid, just as if you had called isValid().
-    static const cstring validField;
-};
+//     /// The name of BMV2's valid field. This is a hidden bit<1> field
+//     /// automatically added by BMV2 to all header types; reading from it tells
+//     /// you whether the header is valid, just as if you had called isValid().
+//     static const cstring validField;
+// };
 
 // using ErrorValue = unsigned int;
 // using ErrorCodesMap = ordered_map<const IR::IDeclaration *, ErrorValue>;

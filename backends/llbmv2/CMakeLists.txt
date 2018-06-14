@@ -87,10 +87,9 @@ add_definitions(${LLVM_DEFINITIONS})
 
 build_unified(BMV2_SRCS)
 add_executable(p4c-llbm2-ss ${BMV2_SRCS})
-
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 
-target_link_libraries (p4c-llbm2-ss bmv2llBackend ${llvm_libs} ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
+target_link_libraries (p4c-llbm2-ss bmv2llBackend LLVMJsonBackend ${llvm_libs} ${P4C_LIBRARIES} ${P4C_LIB_DEPS})
 
 install(TARGETS p4c-llbm2-ss RUNTIME DESTINATION ${P4C_RUNTIME_OUTPUT_DIRECTORY})
 

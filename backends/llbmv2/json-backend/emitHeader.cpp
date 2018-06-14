@@ -20,6 +20,7 @@ limitations under the License.
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
+using namespace LLVMJsonBackend;
 
 namespace LLBMV2 {
 

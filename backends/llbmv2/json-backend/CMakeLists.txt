@@ -6,7 +6,7 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
-add_library(LLVMJsonBackend MODULE
+add_library(LLVMJsonBackend STATIC
     # List your source files here.
     llvm-json.cpp
     emitHeader.cpp
@@ -26,7 +26,7 @@ set_target_properties(LLVMJsonBackend PROPERTIES
     COMPILE_FLAGS "-fno-rtti"
 )
 # Can add those libraries that are not already present in 'p4c-llbm2-ss' binary
-llvm_map_components_to_libnames(llvm_libs)
+llvm_map_components_to_libnames(llvm_libs passes ipo)
 
 target_link_libraries (LLVMJsonBackend ${llvm_libs} )
 

@@ -19,6 +19,8 @@ limitations under the License.
 #include "emitControl.h"
 
 using namespace llvm;
+using namespace LLVMJsonBackend;
+
 namespace LLBMV2 {
 
 Util::IJson* ControlConverter::convertTable(CallInst *apply_call,

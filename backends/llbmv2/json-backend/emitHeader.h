@@ -26,6 +26,7 @@ limitations under the License.
 #include "llvm/IR/Instructions.h"
 #include <set>
 
+using namespace LLVMJsonBackend;
 namespace LLBMV2 {
 
 // class Backend;

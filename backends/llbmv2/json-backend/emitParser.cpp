@@ -24,6 +24,8 @@ limitations under the License.
 #include <bits/stdc++.h>
 
 using namespace llvm;
+using namespace LLVMJsonBackend;
+
 namespace LLBMV2 {
 
 // cstring ParserConverter::getBinaryOperation(BinaryOperator *inst) {

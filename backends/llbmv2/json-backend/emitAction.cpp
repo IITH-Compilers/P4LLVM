@@ -17,6 +17,7 @@ limitations under the License.
 #include "emitAction.h"
 
 using namespace llvm;
+using namespace LLVMJsonBackend;
 namespace LLBMV2 {
 
 Util::IJson *ConvertActions::getJsonExp(Value *inst)
@@ -214,17 +215,18 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             cstring prim;
             auto parameters = new Util::JsonArray();
             if(callName.contains("setValid") || callName.contains("setInvalid")) {
-                if (callName == "setValid")
+                if (callName.contains("setValid"))
                 {
                     prim = "add_header";
                 }
-                else if (callName == "setInvalid")
+                else if (callName.contains("setInvalid"))
                 {
                     prim = "remove_header";
                 }
-                auto obj = new Util::JsonArray();
-                getFieldName(I->getOperand(0), obj);
-                parameters->append(obj);
+                // auto obj = new Util::JsonArray();
+                // getFieldName(I->getOperand(0), obj);
+                auto obj = getFieldName(I->getOperand(0)).substr(1);
+                parameters->append((new Util::JsonObject())->emplace("type", "header")->emplace("value", obj));
 
             } else if (callName.contains("mark_to_drop")) {
                 prim = "drop";

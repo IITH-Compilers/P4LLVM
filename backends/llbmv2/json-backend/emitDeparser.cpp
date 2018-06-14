@@ -18,6 +18,8 @@ limitations under the License.
 #include "emitDeparser.h"
 #include "helpers.h"
 
+using namespace LLVMJsonBackend;
+
 namespace LLBMV2 {
 
 bool ConvertDeparser::processDeparser(Function *F) {

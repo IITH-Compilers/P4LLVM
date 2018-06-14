@@ -239,21 +239,21 @@ void JsonBackend::populateJsonObjects(Module &M)
 	jsonTop.emplace("header_union_types", json->header_union_types);
 	jsonTop.emplace("header_unions", json->header_unions);
 	jsonTop.emplace("header_union_stacks", json->header_union_stacks);
-	field_lists = LLBMV2::mkArrayField(&jsonTop, "field_lists");
+	field_lists = LLVMJsonBackend::mkArrayField(&jsonTop, "field_lists");
 	jsonTop.emplace("errors", json->errors);
 	jsonTop.emplace("enums", json->enums);
 	jsonTop.emplace("parsers", json->parsers);
 	jsonTop.emplace("deparsers", json->deparsers);
-	meter_arrays = LLBMV2::mkArrayField(&jsonTop, "meter_arrays");
-	counters = LLBMV2::mkArrayField(&jsonTop, "counter_arrays");
-	register_arrays = LLBMV2::mkArrayField(&jsonTop, "register_arrays");
+	meter_arrays = LLVMJsonBackend::mkArrayField(&jsonTop, "meter_arrays");
+	counters = LLVMJsonBackend::mkArrayField(&jsonTop, "counter_arrays");
+	register_arrays = LLVMJsonBackend::mkArrayField(&jsonTop, "register_arrays");
 	jsonTop.emplace("calculations", json->calculations);
-	learn_lists = LLBMV2::mkArrayField(&jsonTop, "learn_lists");
-	LLBMV2::nextId("learn_lists");
+	learn_lists = LLVMJsonBackend::mkArrayField(&jsonTop, "learn_lists");
+	LLVMJsonBackend::nextId("learn_lists");
 	jsonTop.emplace("actions", json->actions);
 	jsonTop.emplace("pipelines", json->pipelines);
 	jsonTop.emplace("checksums", json->checksums);
-	force_arith = LLBMV2::mkArrayField(&jsonTop, "force_arith");
+	force_arith = LLVMJsonBackend::mkArrayField(&jsonTop, "force_arith");
 	jsonTop.emplace("extern_instances", json->externs);
 	jsonTop.emplace("field_aliases", json->field_aliases);
 }
