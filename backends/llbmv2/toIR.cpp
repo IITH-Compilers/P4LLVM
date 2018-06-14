@@ -488,7 +488,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 std::vector<Value*> params;
                 params.push_back(val);
                 FunctionType *FT = FunctionType::get(backend->Builder.getInt1Ty(), args, false);                
-                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
+                Function *decl = Function::Create(FT, Function::ExternalLinkage, bi->name.name.c_str(), backend->TheModule.get());
                 return backend->Builder.CreateCall(decl,params);
             } 
             else if (bi->name == IR::Type_Header::setValid || bi->name == IR::Type_Header::setInvalid) {
@@ -498,7 +498,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 std::vector<Value*> params;
                 params.push_back(val);
                 FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);                
-                auto decl = backend->TheModule->getOrInsertFunction(bi->name.name.c_str(), FT);
+                Function *decl = Function::Create(FT, Function::ExternalLinkage, bi->name.name.c_str(), backend->TheModule.get());
                 return backend->Builder.CreateCall(decl,params);
             } 
             else if (bi->name == IR::Type_Stack::push_front || bi->name == IR::Type_Stack::pop_front) {
