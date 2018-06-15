@@ -163,7 +163,7 @@ void ControlConverter::processControl(Function* F) {
     std::vector<CallInst*> *apply_calls = new std::vector<CallInst*>();
     for(auto c = inst_begin(F); c != inst_end(F); c++) {
         if(auto cinst = dyn_cast<CallInst>(&*c))
-            if(cinst->getCalledFunction()->getName().contains("apply"))
+            if(cinst->getCalledFunction()->getName().contains("apply_"))
                 apply_calls->push_back(cinst);
     }
     cstring cur_table_name, nex_table_name;
@@ -171,7 +171,9 @@ void ControlConverter::processControl(Function* F) {
         pipeline->emplace("init_table", Util::JsonValue::null);
     }
     else {
-        cur_table_name = genName("table_");
+        // cur_table_name = genName("table_");
+        auto apply_call_name = (*(apply_calls->begin()))->getCalledFunction()->getName();
+        cur_table_name = apply_call_name.split("_").second.str().c_str();
         pipeline->emplace("init_table", cur_table_name);
     }
     // Addition of tables start here
@@ -181,7 +183,8 @@ void ControlConverter::processControl(Function* F) {
         if((cinst+1) == apply_calls->end()) {
             ret = convertTable(*cinst, cur_table_name, cstring::empty);
         } else {
-            nex_table_name = genName("table_");
+            // nex_table_name = genName("table_");
+            nex_table_name = ((cinst+1) != apply_calls->end())? (*(cinst+1))->getCalledFunction()->getName().split("_").second.str().c_str() : "";
             ret = convertTable(*cinst, cur_table_name, nex_table_name);
         }
         tables->append(ret);
