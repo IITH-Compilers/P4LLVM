@@ -22,74 +22,75 @@ namespace LLBMV2 {
 
 
 bool ControlConverter::preorder(const IR::P4Action* t){
-    Function *old_func = backend->function;
-    BasicBlock *old_bb = backend->Builder.GetInsertBlock();
+    if(backend->action_function.count(t->controlPlaneName()) == 0) {
+        Function *old_func = backend->function;
+        BasicBlock *old_bb = backend->Builder.GetInsertBlock();
 
-    std::vector<Type*> args;
-    std::vector<std::string> names;
-    std::set<std::string> allnames;
-    std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
-
-    for (auto param : *(t->parameters)->getEnumerator()) {
-        //add this parameter type to args
-        if(param->hasOut())
-            args.push_back(PointerType::get(backend->getType(param->type), 0));
-        else
-            args.push_back(backend->getType(param->type));
-        names.push_back("alloca_"+std::string(param->name.name));
-        allnames.insert(std::string(param->name.name));
-        MYDEBUG(std::cout << param->name.name << "\n";)
-    }
-    
-
-    action_call_args[t->name.name] = std::vector<llvm::Value *>(0);
-    //add more parameters from outer scopes
-    auto &vars = backend->st.getVars(backend->st.getCurrentScope());
-    for (auto vp : vars) {
-        if (allnames.find(std::string(vp.first)) == allnames.end()) {
-            args.push_back(vp.second->getType());
-            action_call_args[t->name.name].push_back(vp.second);
-            names.push_back(std::string(vp.first));
-            allnames.insert(std::string(vp.first));
-            // MYDEBUG(vp.second->dump();)
+        std::vector<Type*> args;
+        std::vector<std::string> names;
+        std::set<std::string> allnames;
+        std::map<cstring, std::vector<llvm::Value *> > action_call_args;    //append these args at end
+        for (auto param : *(t->parameters)->getEnumerator()) {
+            //add this parameter type to args
+            if(param->hasOut())
+                args.push_back(PointerType::get(backend->getType(param->type), 0));
+            else
+                args.push_back(backend->getType(param->type));
+            names.push_back("alloca_"+std::string(param->name.name));
+            allnames.insert(std::string(param->name.name));
+            MYDEBUG(std::cout << param->name.name << "\n";)
         }
-    }
-    backend->st.enterScope();
+        
 
-    FunctionType *FT = FunctionType::get(Type::getVoidTy(backend->TheContext), args, false);
-    backend->function = Function::Create(FT, Function::ExternalLinkage, Twine(t->name.name), backend->TheModule.get());
-    backend->function->setAttributes(backend->function->getAttributes().addAttribute(backend->TheContext, AttributeList::FunctionIndex, "action"));
-    assert(backend->function->getAttributes().hasAttributes(AttributeList::FunctionIndex) && "attribute not set");
-    backend->action_function[t->controlPlaneName()] = backend->function;
-    backend->bbInsert = BasicBlock::Create(backend->TheContext, "entry", backend->function);
-
-    backend->Builder.SetInsertPoint(backend->bbInsert);
-
-    auto names_iter = names.begin();
-    std::cout << __LINE__ << "\n\n";
-    for (auto arg = backend->function->arg_begin(); arg != backend->function->arg_end(); arg++)
-    {
-        //name the argument
-        arg->setName(Twine(*names_iter));
-        if(!arg->getType()->isPointerTy()) {
-            AllocaInst *alloca = backend->Builder.CreateAlloca(arg->getType());
-            backend->Builder.CreateStore(arg, alloca);
-            backend->st.insert(std::string(*names_iter),alloca);
+        action_call_args[t->name.name] = std::vector<llvm::Value *>(0);
+        //add more parameters from outer scopes
+        auto &vars = backend->st.getVars(backend->st.getCurrentScope());
+        for (auto vp : vars) {
+            if (allnames.find(std::string(vp.first)) == allnames.end()) {
+                args.push_back(vp.second->getType());
+                action_call_args[t->name.name].push_back(vp.second);
+                names.push_back(std::string(vp.first));
+                allnames.insert(std::string(vp.first));
+                // MYDEBUG(vp.second->dump();)
+            }
         }
-        else
-            backend->st.insert(std::string(*names_iter),arg);            
-       // arg->dump();
-        names_iter++;
+        backend->st.enterScope();
+
+        FunctionType *FT = FunctionType::get(Type::getVoidTy(backend->TheContext), args, false);
+        backend->function = Function::Create(FT, Function::ExternalLinkage, Twine(t->controlPlaneName()), backend->TheModule.get());
+        backend->function->setAttributes(backend->function->getAttributes().addAttribute(backend->TheContext, AttributeList::FunctionIndex, "action"));
+        assert(backend->function->getAttributes().hasAttributes(AttributeList::FunctionIndex) && "attribute not set");
+        backend->action_function[t->controlPlaneName()] = backend->function;
+        backend->bbInsert = BasicBlock::Create(backend->TheContext, "entry", backend->function);
+
+        backend->Builder.SetInsertPoint(backend->bbInsert);
+
+        auto names_iter = names.begin();
+        std::cout << __LINE__ << "\n\n";
+        for (auto arg = backend->function->arg_begin(); arg != backend->function->arg_end(); arg++)
+        {
+            //name the argument
+            arg->setName(Twine(*names_iter));
+            if(!arg->getType()->isPointerTy()) {
+                AllocaInst *alloca = backend->Builder.CreateAlloca(arg->getType());
+                backend->Builder.CreateStore(arg, alloca);
+                backend->st.insert(std::string(*names_iter),alloca);
+            }
+            else
+                backend->st.insert(std::string(*names_iter),arg);            
+        // arg->dump();
+            names_iter++;
+        }
+
+        t->body->apply(*toIR);
+
+        backend->st.exitScope();
+        backend->function = old_func;   
+        backend->bbInsert = old_bb; 
+        backend->Builder.CreateRetVoid();
+
+        backend->Builder.SetInsertPoint(backend->bbInsert);
     }
-
-    t->body->apply(*toIR);
-
-    backend->st.exitScope();
-    backend->function = old_func;   
-    backend->bbInsert = old_bb; 
-    backend->Builder.CreateRetVoid();
-
-    backend->Builder.SetInsertPoint(backend->bbInsert);
     return false;
 }
 
