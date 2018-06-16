@@ -2,6 +2,6 @@
 
 // namespace llvm {
 extern "C" {
-llvm::ModulePass *createJsonBackendPass();
+llvm::ModulePass *createJsonBackendPass(cstring);
 // }
 }

@@ -38,7 +38,8 @@ bool ConvertDeparser::processDeparser(Function *F) {
                 int argCount = emit_call->getFunctionType()->getFunctionNumParams();
                 assert(argCount == 1 &&
                        "More than one argument in emit function, not expected");
-                order->append(getFieldName(emit_call->getOperand(0)).substr(1));
+                auto headerName = getFieldName(emit_call->getOperand(0)).substr(1);
+                order->append(headerName);
             }
             else {
                 errs() << "ERROR : Deparser contains unknown function call\n"

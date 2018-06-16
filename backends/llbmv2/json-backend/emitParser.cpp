@@ -354,10 +354,10 @@ bool ParserConverter::processParser(llvm::Function *F) {
                             int64_t jmpVal;
                             if(isa<ConstantInt>(icmp->getOperand(0)) &&
                                 !isa<ConstantInt>(icmp->getOperand(1))) {
-                                jmpVal = dyn_cast<ConstantInt>(icmp->getOperand(0))->getSExtValue();
+                                jmpVal = dyn_cast<ConstantInt>(icmp->getOperand(0))->getZExtValue();
                             } else if (!isa<ConstantInt>(icmp->getOperand(0)) &&
                                 isa<ConstantInt>(icmp->getOperand(1))) {
-                                jmpVal = dyn_cast<ConstantInt>(icmp->getOperand(1))->getSExtValue();
+                                jmpVal = dyn_cast<ConstantInt>(icmp->getOperand(1))->getZExtValue();
                             } else {
                                 assert(false && "non-const value in switch case, should not happen");
                                 return false;
@@ -410,7 +410,11 @@ bool ParserConverter::processParser(llvm::Function *F) {
                     }
                 }
                 auto transition_key_arr = new Util::JsonArray();
-                getFieldName(cond_branch->getCondition(), transition_key_arr);
+                auto comp_inst = dyn_cast<Instruction>(cond_branch->getCondition());
+                for(auto i = 0; i < comp_inst->getNumOperands(); i++) {
+                    if (!isa<Constant>(comp_inst->getOperand(i)))
+                        getFieldName(comp_inst->getOperand(i), transition_key_arr);
+                }
                 auto transition_key = new Util::JsonObject();
                 transition_key->emplace("type", "field");
                 transition_key->emplace("value", transition_key_arr);

@@ -160,7 +160,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
         auto ty = typemap->getType(c);
         if(!ty)
             ty = c->type;
-        return ConstantInt::get(backend->getType(ty),(c->value).get_si());
+        return ConstantInt::get(backend->getType(ty),(c->value).get_ui());
     }
 
 

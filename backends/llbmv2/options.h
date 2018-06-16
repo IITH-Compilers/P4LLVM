@@ -28,6 +28,7 @@ class BMV2Options : public CompilerOptions {
  public:
     LLBMV2::Target arch = LLBMV2::Target::UNKNOWN;
     const char* bpath = "./backends/llbmv2/json-backend/libLLVMJsonBackend.so";
+    bool optimize = false;
     BMV2Options()
     {
         registerOption("--arch", "arch",
@@ -41,12 +42,18 @@ class BMV2Options : public CompilerOptions {
                         }
                         return true; },
                        "Compile for the specified architecture (psa or ss), default is ss.");
-        registerOption("--bpath", "bpath",
-                       [this](const char *arg) {
-                           bpath = arg;
+        // registerOption("--bpath", "bpath",
+        //                [this](const char *arg) {
+        //                    bpath = arg;
+        //                    return true;
+        //                },
+        //                "provide path to libLLVMJsonBackend.so (default: build/backends/llbmv2/json-backend/libLLVMJsonBackend.so)");
+        registerOption("--optimize", nullptr,
+                       [this](const char *) {
+                           optimize = true;
                            return true;
                        },
-                       "provide path to libLLVMJsonBackend.so (default: build/backends/llbmv2/json-backend/libLLVMJsonBackend.so)");
+                       "optimize with LLVM Oz");
      }
 };
 

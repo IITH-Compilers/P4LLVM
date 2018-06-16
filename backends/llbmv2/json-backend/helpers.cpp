@@ -122,7 +122,7 @@ static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep, Util::Json
 {
     auto id = gep->idx_begin();
     id++; // ignore the first index as it will be a zero corresponding to the current type
-    std::string result;
+    std::string result = ".";
     auto src_type = gep->getSourceElementType();
     for (; id != gep->idx_end(); id++)
     {
@@ -137,13 +137,17 @@ static std::string getMultiDimFieldName(llvm::GetElementPtrInst *gep, Util::Json
             assert(false && "This should not happen");
         src_type = dyn_cast<StructType>(src_type)->getElementType(val);
     }
-    return result.substr(0, result.length() - 2);
+    return result.substr(0, result.length() - 1);
 }
 
 cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
 {
-    //errs() << "input inst is \n"
-        //    << *arg << "\n";
+    // This condition is for getting action parameter name
+    if(auto fun_arg = dyn_cast<Argument>(arg))
+        if(!fun_arg->getType()->isPointerTy()) {
+            auto paramName = (fun_arg->getParent()->getName() + "._" + fun_arg->getName());
+            return paramName.str().c_str();
+        }
     if (!isa<Instruction>(arg))
         return "";
     if (isa<AllocaInst>(arg)) {
@@ -177,7 +181,7 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
         }
         else
         {
-            std::string result = getMultiDimFieldName(gep, fieldArr);
+            auto result = getMultiDimFieldName(gep, fieldArr);
             return result + getFieldName(gep->getPointerOperand(), fieldArr);
         }
     }
@@ -193,6 +197,15 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
         //errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
         assert(bc->getType()->isPointerTy() && "not a pointer type in getFieldName");
         return getFieldName(bc->getOperand(0), fieldArr);
+    }
+
+    if (auto iv = dyn_cast<InsertValueInst>(arg))
+    {
+        // auto gep = dyn_cast<GetElementPtrInst>(dyn_cast<Instruction>(iv->getOperand(0))->getOperand(0));
+        // if(!gep)
+        //     assert(false && "insetvalue inst has no gep instruction");
+        return ("."+StringRef(getFieldName(iv->getOperand(1), fieldArr).substr(1)).split(".struct").first).str().c_str();
+        // return "";
     }
 }
 

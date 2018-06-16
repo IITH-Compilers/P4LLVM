@@ -240,36 +240,24 @@ public:
     void runLLVMPasses(BMV2Options &options)
     {
         legacy::PassManager MPM;
-        std::unique_ptr<legacy::FunctionPassManager> FPM;
-        FPM.reset(new legacy::FunctionPassManager(TheModule.get()));
-        PassManagerBuilder PMBuilder;
-        PMBuilder.OptLevel = 2;
-        PMBuilder.SizeLevel = 2;
-        PMBuilder.populateFunctionPassManager(*FPM);
-        PMBuilder.populateModulePassManager(MPM);
-        // void *handle;
-        // llvm::ModulePass *(*JsonBackend)();
-        // char *error;
-        // // handle = dlopen("./backends/llbmv2/json-backend/libLLVMJsonBackend.so", RTLD_LAZY);
-        // handle = dlopen(options.bpath, RTLD_LAZY);
-        // if (!handle) {
-        //     // fputs(dlerror(), stderr);
-        //     std::cerr << dlerror() << std::endl;
-        //     exit(1);
-        // }
-        // JsonBackend = (llvm::ModulePass * (*)()) dlsym(handle, "createJsonBackendPass");
-        // if ((error = dlerror()) != nullptr) {
-        //     std::cerr << error << std::endl;
-        //     exit(1);
-        // }
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
-        FPM->doInitialization();
-        for (Function &F : *TheModule)
-            FPM->run(F);
-        FPM->doFinalization();
+        if(options.optimize) {
 
+            std::unique_ptr<legacy::FunctionPassManager> FPM;
+            FPM.reset(new legacy::FunctionPassManager(TheModule.get()));
+            PassManagerBuilder PMBuilder;
+            PMBuilder.OptLevel = 2;
+            PMBuilder.SizeLevel = 2;
+            PMBuilder.populateFunctionPassManager(*FPM);
+            PMBuilder.populateModulePassManager(MPM);
+            FPM->doInitialization();
+            for (Function &F : *TheModule)
+                FPM->run(F);
+            FPM->doFinalization();
+        }
+        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
+        // TheModule->dump();
         // MPM.add((*JsonBackend)());
-        MPM.add(createJsonBackendPass());
+        MPM.add(createJsonBackendPass(options.outputFile));
         MPM.run(*TheModule.get());
         std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Sucessfully ran pass" << std::endl;
         // dlclose(handle);

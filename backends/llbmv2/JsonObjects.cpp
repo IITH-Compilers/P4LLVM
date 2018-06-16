@@ -296,7 +296,8 @@ JsonObjects::add_parser(const cstring& name) {
     unsigned id = LLBMV2::nextId("parser");
     parser->emplace("name", name);
     parser->emplace("id", id);
-    parser->emplace("init_state", IR::ParserState::start);
+    // parser->emplace("init_state", IR::ParserState::start);
+    parser->emplace("init_state", "entry");
     auto parse_states = new Util::JsonArray();
     parser->emplace("parse_states", parse_states);
     parsers->append(parser);

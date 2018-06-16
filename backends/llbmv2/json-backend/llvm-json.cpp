@@ -28,7 +28,8 @@ struct JsonBackend : public ModulePass
 {
 public:
     static char ID;
-	JsonBackend() : ModulePass(ID) {
+	JsonBackend(cstring fn) : ModulePass(ID) {
+		outFilename = fn;
 		json = new LLBMV2::JsonObjects();
 		pc = new LLBMV2::ParserConverter(json);
 		cd = new LLBMV2::ConvertDeparser(json);
@@ -47,6 +48,7 @@ public:
 
 	virtual bool runOnModule(Module &M) {
 		// initialize json objects
+		M.dump();
 		populateJsonObjects(M);
 		populateStruct2Type(M.getIdentifiedStructTypes(),
 							M.getNamedMetadata("header"),
@@ -64,7 +66,10 @@ public:
 		emitActions(M);
 		emitChecksum(M);
 		emitControlBlock(M);
-		printJsonToFile(M.getSourceFileName()+".ll.json");
+		if(outFilename == nullptr)
+			printJsonToFile(M.getSourceFileName() + ".ll.json");
+		else
+			printJsonToFile((std::string)outFilename);
 		return false;
 	}
 	bool emitHeaders(Module &M);
@@ -99,6 +104,7 @@ public:
 	LLBMV2::ControlConverter *conc;
 	void printJsonToFile(const std::string fn);
 	std::map<llvm::StructType *, std::string> *struct2Type;
+	cstring outFilename;
 };
 }
 
@@ -285,8 +291,8 @@ bool JsonBackend::emitHeaders(Module &M) {
 }
 
 extern "C" {
-    ModulePass *createJsonBackendPass()
+    ModulePass *createJsonBackendPass(cstring outFilename)
     {
-    return new JsonBackend();
+    	return new JsonBackend(outFilename);
     }
 }
