@@ -194,8 +194,25 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
 
     if (auto bc = dyn_cast<BitCastInst>(arg))
     {
-        //errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
         assert(bc->getType()->isPointerTy() && "not a pointer type in getFieldName");
+        // This type is for checking if there is cast from header to integer type, this may happen
+        // if we are accessing first element of the structure.
+        // In this case get the first element not the first structure
+        if(bc->getType()->getPointerElementType()->isIntegerTy() &&
+            bc->getOperand(0)->getType()->getPointerElementType()->isStructTy()) {
+
+            auto elemt = dyn_cast<StructType>(bc->getOperand(0)->getType()->getPointerElementType());
+            auto headerName = elemt->getName().str() + ".field_0";
+            if(fieldArr)
+                fieldArr->append(headerName);
+            while(elemt->getElementType(0)->isStructTy()) {
+                elemt = dyn_cast<StructType>(elemt->getElementType(0));
+                headerName = headerName + "." + elemt->getName().str()+".field_0";
+                if(fieldArr)
+                    fieldArr->append(elemt->getName().str() + ".field_0");
+            }
+            return (headerName).c_str();
+        }
         return getFieldName(bc->getOperand(0), fieldArr);
     }
 
@@ -207,6 +224,8 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
         return ("."+StringRef(getFieldName(iv->getOperand(1), fieldArr).substr(1)).split(".struct").first).str().c_str();
         // return "";
     }
+    assert(false && "Unknow type instruction type in getFieldName");
+    return "";
 }
 
 cstring getHeaderType(cstring headerType, header_type ht) {
