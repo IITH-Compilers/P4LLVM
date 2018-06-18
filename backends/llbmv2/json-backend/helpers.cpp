@@ -451,7 +451,10 @@ Util::IJson *getJsonExp(Value *inst)
         auto trunc_exp = new Util::JsonObject();
         trunc_exp->emplace("type", "expression");
         trunc_exp->emplace("value", trunc);
-        return trunc_exp;
+        auto trunc_exp_exp = new Util::JsonObject();
+        trunc_exp_exp->emplace("type", "expression");
+        trunc_exp_exp->emplace("value", trunc_exp);
+        return trunc_exp_exp;
     }
     else if (auto sel = dyn_cast<SelectInst>(inst))
     {
@@ -551,7 +554,6 @@ Util::IJson *getJsonExp(Value *inst)
     }
     else if(auto fun_arg = dyn_cast<Argument>(inst))
     {
-        if(fun_arg->getName() == "struct.metadata")
         return Util::JsonValue::null;
     }
     else
