@@ -20,144 +20,144 @@ using namespace llvm;
 using namespace LLVMJsonBackend;
 namespace LLBMV2 {
 
-Util::IJson *ConvertActions::getJsonExp(Value *inst)
-{
-    //errs() << "inst into getJsonExp is\n" << *inst << "\n";
-    auto result = new Util::JsonObject();
-    if (auto bo = dyn_cast<BinaryOperator>(inst))
-    {
-        // cstring op = getBinaryOperation(bo);
-        cstring op = bo->getOpcodeName();
-        result->emplace("op", op);
-        auto left = getJsonExp(bo->getOperand(0));
-        auto right = getJsonExp(bo->getOperand(1));
-        result->emplace("left", left);
-        result->emplace("right", right);
-        // auto fin = new Util::JsonObject();
-        assert(inst->getType()->isIntegerTy() && "should be an integer type");
-        unsigned bw = inst->getType()->getIntegerBitWidth();
-        auto result_ex = new Util::JsonObject();
-        result_ex->emplace("type", "expression");
-        result_ex->emplace("value", result);
-        std::stringstream stream;
-        stream << std::hex << (std::pow(2, bw) - 1);
-        auto trunc = new Util::JsonObject();
-        trunc->emplace("left", result_ex);
-        auto trunc_val = new Util::JsonObject();
-        trunc_val->emplace("type", "hexstr");
-        trunc_val->emplace("value", stream.str().c_str());
-        trunc->emplace("right", trunc_val);
-        trunc->emplace("op", "&");
-        auto trunc_exp = new Util::JsonObject();
-        trunc_exp->emplace("type", "expression");
-        trunc_exp->emplace("value", trunc);
-        return trunc_exp;
-    }
-    else if(auto sel = dyn_cast<SelectInst>(inst)) {
-        if(sel->getType()->isIntegerTy(1)) {
-            result->emplace("op", "?");
-            auto left = dyn_cast<ConstantInt>(sel->getOperand(1))->getZExtValue();
-            auto right = dyn_cast<ConstantInt>(sel->getOperand(2))->getZExtValue();
-            auto cond = getJsonExp(sel->getOperand(0));
-            auto left_exp = new Util::JsonObject();
-            left_exp->emplace("type", "hexstr");
-            left_exp->emplace("value", left);
-            auto right_exp = new Util::JsonObject();
-            right_exp->emplace("type", "hexstr");
-            right_exp->emplace("value", right);
-            result->emplace("left", left_exp);
-            result->emplace("right", right_exp);
-            result->emplace("cond", cond);
-            auto result_ex = new Util::JsonObject();
-            result_ex->emplace("type", "expression");
-            result_ex->emplace("value", result);
-            return result_ex;
-        }
-        else
-            assert(false && "select inst with non boolean not handled");
-    }
-    else if (auto cmp  = dyn_cast<ICmpInst>(inst))
-    {
-        //errs() << "number of operands in icmp are : " << cmp->getNumOperands() << "\n";
-        auto pred = CmpInst::getPredicateName(cmp->getSignedPredicate()).str();
-        //errs() << "predicate name: " << pred << "\n";
-        cstring op;
-        if(pred == "eq")
-            op = "==";
-        else if(pred == "ne")
-            op = "!=";
-        else if(pred == "sge" || pred == "uge")
-            op = ">=";
-        else if(pred == "sle" || pred == "ule")
-            op = "<=";
-        else if(pred == "sgt" || pred == "ugt")
-            op = ">";
-        else if(pred == "slt" || pred == "ult")
-            op = "<";
-        else
-        {
-            errs() << *inst << "\n";
-            assert(false && "Unknown operation in ICMP");
-        }
-        auto left = getJsonExp(cmp->getOperand(0));
-        auto right = getJsonExp(cmp->getOperand(1));
-        result->emplace("op", op);
-        result->emplace("left", left);
-        result->emplace("right", right);
-        auto result_ex = new Util::JsonObject();
-        result_ex->emplace("type", "expression");
-        result_ex->emplace("value", result);
-        return result_ex;
-    }
-    else if (auto cnst = dyn_cast<ConstantInt>(inst))
-    {
-        std::stringstream stream;
-        stream << std::hex << cnst->getSExtValue();
-        result->emplace("type", "hexstr");
-        result->emplace("value", stream.str().c_str());
-        return result;
-    }
-    else if (auto ld = dyn_cast<LoadInst>(inst))
-    {
-        auto headername = new Util::JsonArray();
-        getFieldName(ld->getOperand(0), headername);
-        result->emplace("type", "field");
-        result->emplace("value", headername);
-        return result;
-    }
-    else if (auto bc = dyn_cast<BitCastInst>(inst))
-    {
-        return getJsonExp(bc->getOperand(0));
-    }
-    else if (auto ze = dyn_cast<ZExtInst>(inst))
-    {
-        auto left = getJsonExp(ze->getOperand(0));
-        auto bw = ze->getType()->getIntegerBitWidth();
-        result->emplace("op", "&");
-        result->emplace("left", left);
-        std::stringstream stream;
-        stream << std::hex << (std::pow(2, bw) - 1);
-        auto trunc_val = new Util::JsonObject();
-        trunc_val->emplace("type", "hexstr");
-        trunc_val->emplace("value", stream.str().c_str());
-        result->emplace("right", trunc_val);
-        auto result_ex = new Util::JsonObject();
-        result_ex->emplace("type", "expression");
-        result_ex->emplace("value", result);
-        return result_ex;
-    }
-    else if(auto fun_arg = dyn_cast<Argument>(inst))
-    {
-        return Util::JsonValue::null;
-    }
-    else
-    {
-        errs() << *inst << "\n"
-               << "ERROR : Unhandled instrution in getJsonExp\n";
-        assert(false);
-        return result;
-    }
-}
+// Util::IJson *ConvertActions::getJsonExp(Value *inst)
+// {
+//     //errs() << "inst into getJsonExp is\n" << *inst << "\n";
+//     auto result = new Util::JsonObject();
+//     if (auto bo = dyn_cast<BinaryOperator>(inst))
+//     {
+//         // cstring op = getBinaryOperation(bo);
+//         cstring op = bo->getOpcodeName();
+//         result->emplace("op", op);
+//         auto left = getJsonExp(bo->getOperand(0));
+//         auto right = getJsonExp(bo->getOperand(1));
+//         result->emplace("left", left);
+//         result->emplace("right", right);
+//         // auto fin = new Util::JsonObject();
+//         assert(inst->getType()->isIntegerTy() && "should be an integer type");
+//         unsigned bw = inst->getType()->getIntegerBitWidth();
+//         auto result_ex = new Util::JsonObject();
+//         result_ex->emplace("type", "expression");
+//         result_ex->emplace("value", result);
+//         std::stringstream stream;
+//         stream << std::hex << (std::pow(2, bw) - 1);
+//         auto trunc = new Util::JsonObject();
+//         trunc->emplace("left", result_ex);
+//         auto trunc_val = new Util::JsonObject();
+//         trunc_val->emplace("type", "hexstr");
+//         trunc_val->emplace("value", stream.str().c_str());
+//         trunc->emplace("right", trunc_val);
+//         trunc->emplace("op", "&");
+//         auto trunc_exp = new Util::JsonObject();
+//         trunc_exp->emplace("type", "expression");
+//         trunc_exp->emplace("value", trunc);
+//         return trunc_exp;
+//     }
+//     else if(auto sel = dyn_cast<SelectInst>(inst)) {
+//         if(sel->getType()->isIntegerTy(1)) {
+//             result->emplace("op", "?");
+//             auto left = dyn_cast<ConstantInt>(sel->getOperand(1))->getZExtValue();
+//             auto right = dyn_cast<ConstantInt>(sel->getOperand(2))->getZExtValue();
+//             auto cond = getJsonExp(sel->getOperand(0));
+//             auto left_exp = new Util::JsonObject();
+//             left_exp->emplace("type", "hexstr");
+//             left_exp->emplace("value", left);
+//             auto right_exp = new Util::JsonObject();
+//             right_exp->emplace("type", "hexstr");
+//             right_exp->emplace("value", right);
+//             result->emplace("left", left_exp);
+//             result->emplace("right", right_exp);
+//             result->emplace("cond", cond);
+//             auto result_ex = new Util::JsonObject();
+//             result_ex->emplace("type", "expression");
+//             result_ex->emplace("value", result);
+//             return result_ex;
+//         }
+//         else
+//             assert(false && "select inst with non boolean not handled");
+//     }
+//     else if (auto cmp  = dyn_cast<ICmpInst>(inst))
+//     {
+//         //errs() << "number of operands in icmp are : " << cmp->getNumOperands() << "\n";
+//         auto pred = CmpInst::getPredicateName(cmp->getSignedPredicate()).str();
+//         //errs() << "predicate name: " << pred << "\n";
+//         cstring op;
+//         if(pred == "eq")
+//             op = "==";
+//         else if(pred == "ne")
+//             op = "!=";
+//         else if(pred == "sge" || pred == "uge")
+//             op = ">=";
+//         else if(pred == "sle" || pred == "ule")
+//             op = "<=";
+//         else if(pred == "sgt" || pred == "ugt")
+//             op = ">";
+//         else if(pred == "slt" || pred == "ult")
+//             op = "<";
+//         else
+//         {
+//             errs() << *inst << "\n";
+//             assert(false && "Unknown operation in ICMP");
+//         }
+//         auto left = getJsonExp(cmp->getOperand(0));
+//         auto right = getJsonExp(cmp->getOperand(1));
+//         result->emplace("op", op);
+//         result->emplace("left", left);
+//         result->emplace("right", right);
+//         auto result_ex = new Util::JsonObject();
+//         result_ex->emplace("type", "expression");
+//         result_ex->emplace("value", result);
+//         return result_ex;
+//     }
+//     else if (auto cnst = dyn_cast<ConstantInt>(inst))
+//     {
+//         std::stringstream stream;
+//         stream << std::hex << cnst->getSExtValue();
+//         result->emplace("type", "hexstr");
+//         result->emplace("value", stream.str().c_str());
+//         return result;
+//     }
+//     else if (auto ld = dyn_cast<LoadInst>(inst))
+//     {
+//         auto headername = new Util::JsonArray();
+//         getFieldName(ld->getOperand(0), headername);
+//         result->emplace("type", "field");
+//         result->emplace("value", headername);
+//         return result;
+//     }
+//     else if (auto bc = dyn_cast<BitCastInst>(inst))
+//     {
+//         return getJsonExp(bc->getOperand(0));
+//     }
+//     else if (auto ze = dyn_cast<ZExtInst>(inst))
+//     {
+//         auto left = getJsonExp(ze->getOperand(0));
+//         auto bw = ze->getType()->getIntegerBitWidth();
+//         result->emplace("op", "&");
+//         result->emplace("left", left);
+//         std::stringstream stream;
+//         stream << std::hex << (std::pow(2, bw) - 1);
+//         auto trunc_val = new Util::JsonObject();
+//         trunc_val->emplace("type", "hexstr");
+//         trunc_val->emplace("value", stream.str().c_str());
+//         result->emplace("right", trunc_val);
+//         auto result_ex = new Util::JsonObject();
+//         result_ex->emplace("type", "expression");
+//         result_ex->emplace("value", result);
+//         return result_ex;
+//     }
+//     else if(auto fun_arg = dyn_cast<Argument>(inst))
+//     {
+//         return Util::JsonValue::null;
+//     }
+//     else
+//     {
+//         errs() << *inst << "\n"
+//                << "ERROR : Unhandled instrution in getJsonExp\n";
+//         assert(false);
+//         return result;
+//     }
+// }
 
 /// return false if the value stored is a parameter of the function
 bool ConvertActions::isAssignment(StoreInst *st) {

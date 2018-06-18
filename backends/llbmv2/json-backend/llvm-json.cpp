@@ -54,6 +54,8 @@ public:
 							M.getNamedMetadata("header"),
 							M.getNamedMetadata("struct"),
 							M.getNamedMetadata("header_union"));
+		LLVMJsonBackend::emitErrors(json);
+		LLVMJsonBackend::emitFieldAliases(json);
 		emitLocalVariables(M);
 		// Iterate on functions
 		// for (auto fun = M.begin(); fun != M.end(); fun++) {

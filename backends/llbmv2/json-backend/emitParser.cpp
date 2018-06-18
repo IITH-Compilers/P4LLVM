@@ -32,56 +32,56 @@ namespace LLBMV2 {
 //     return inst->getOpcodeName();
 // }
 
-Util::IJson* ParserConverter::getJsonExp(Value *inst) {
-    auto result = new Util::JsonObject();
-    if(auto bo = dyn_cast<BinaryOperator>(inst)) {
-        // cstring op = getBinaryOperation(bo);
-        cstring op = bo->getOpcodeName();
-        result->emplace("op", op);
-        auto left = getJsonExp(bo->getOperand(0));
-        auto right = getJsonExp(bo->getOperand(1));
-        result->emplace("left", left);
-        result->emplace("right", right);
-        // auto fin = new Util::JsonObject();
-        assert(inst->getType()->isIntegerTy() && "should be an integer type");
-        unsigned bw = inst->getType()->getIntegerBitWidth();
-        auto result_ex = new Util::JsonObject();
-        result_ex->emplace("type", "expression");
-        result_ex->emplace("value", result);
-        std::stringstream stream;
-        stream << std::hex << (std::pow(2, bw)-1);
-        auto trunc = new Util::JsonObject();
-        trunc->emplace("left", result_ex);
-        auto trunc_val = new Util::JsonObject();
-        trunc_val->emplace("hexstr", stream.str().c_str());
-        trunc->emplace("right", trunc_val);
-        trunc->emplace("op", "&");
-        auto trunc_exp = new Util::JsonObject();
-        trunc_exp->emplace("type", "expression");
-        trunc_exp->emplace("value", trunc);
-        return trunc_exp;
-    }
-    else if(auto cnst = dyn_cast<ConstantInt>(inst)) {
-        std::stringstream stream;
-        stream << std::hex << cnst->getSExtValue();
-        result->emplace("hexstr", stream.str().c_str());
-        return result;
-    }
-    else if (auto ld = dyn_cast<LoadInst>(inst)) {
-        auto headername = new Util::JsonArray();
-        getFieldName(ld->getOperand(0), headername);
-        result->emplace("field", headername);
-        return result;
-    }
-    else if (auto bc = dyn_cast<BitCastInst>(inst)) {
-        return getJsonExp(bc->getOperand(0));
-    }
-    else {
-        errs() << *inst << "\n" << "ERROR : Unhandled instrution in getJsonExp\n";
-        assert(false);
-        return result;
-    }
-}
+// Util::IJson* ParserConverter::getJsonExp(Value *inst) {
+//     auto result = new Util::JsonObject();
+//     if(auto bo = dyn_cast<BinaryOperator>(inst)) {
+//         // cstring op = getBinaryOperation(bo);
+//         cstring op = bo->getOpcodeName();
+//         result->emplace("op", op);
+//         auto left = getJsonExp(bo->getOperand(0));
+//         auto right = getJsonExp(bo->getOperand(1));
+//         result->emplace("left", left);
+//         result->emplace("right", right);
+//         // auto fin = new Util::JsonObject();
+//         assert(inst->getType()->isIntegerTy() && "should be an integer type");
+//         unsigned bw = inst->getType()->getIntegerBitWidth();
+//         auto result_ex = new Util::JsonObject();
+//         result_ex->emplace("type", "expression");
+//         result_ex->emplace("value", result);
+//         std::stringstream stream;
+//         stream << std::hex << (std::pow(2, bw)-1);
+//         auto trunc = new Util::JsonObject();
+//         trunc->emplace("left", result_ex);
+//         auto trunc_val = new Util::JsonObject();
+//         trunc_val->emplace("hexstr", stream.str().c_str());
+//         trunc->emplace("right", trunc_val);
+//         trunc->emplace("op", "&");
+//         auto trunc_exp = new Util::JsonObject();
+//         trunc_exp->emplace("type", "expression");
+//         trunc_exp->emplace("value", trunc);
+//         return trunc_exp;
+//     }
+//     else if(auto cnst = dyn_cast<ConstantInt>(inst)) {
+//         std::stringstream stream;
+//         stream << std::hex << cnst->getSExtValue();
+//         result->emplace("hexstr", stream.str().c_str());
+//         return result;
+//     }
+//     else if (auto ld = dyn_cast<LoadInst>(inst)) {
+//         auto headername = new Util::JsonArray();
+//         getFieldName(ld->getOperand(0), headername);
+//         result->emplace("field", headername);
+//         return result;
+//     }
+//     else if (auto bc = dyn_cast<BitCastInst>(inst)) {
+//         return getJsonExp(bc->getOperand(0));
+//     }
+//     else {
+//         errs() << *inst << "\n" << "ERROR : Unhandled instrution in getJsonExp\n";
+//         assert(false);
+//         return result;
+//     }
+// }
 
 
 Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
@@ -97,7 +97,7 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
         if(dyn_cast<PointerType>(assign->getOperand(1)->getType())->getElementType()->isStructTy())
             operation = "assign_header";
         result->emplace("op", operation);
-        params->append((new Util::JsonObject())->emplace("field", left_field));
+        params->append((new Util::JsonObject())->emplace("type", "field")->emplace("value", left_field));
         params->append(right);
     //     auto l = conv->convertLeftValue(assign->left);
     //     bool convertBool = type->is<IR::Type_Boolean>();
@@ -433,7 +433,7 @@ bool ParserConverter::processParser(llvm::Function *F) {
             trans->emplace("next_state", next_state);
             json->add_parser_transition(state_id, trans);
         }else {
-            assert(false && "Never come here");
+            // assert(false && "Never come here");
             return false;
         }
 

@@ -58,7 +58,7 @@ class ParserConverter {
     // ParserConverter(LLBMV2::JsonObjects *json):json(json);
     Util::IJson* convertParserStatement(llvm::Instruction*);
     bool processParser(llvm::Function *F);
-    Util::IJson* getJsonExp(llvm::Value*);
+    // Util::IJson* getJsonExp(llvm::Value*);
     cstring getBinaryOperation(llvm::Value *);
     explicit ParserConverter(LLBMV2::JsonObjects* json) : json(json){}
     // corelib(P4::P4CoreLibrary::instance) {}

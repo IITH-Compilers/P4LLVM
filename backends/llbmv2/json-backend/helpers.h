@@ -26,6 +26,9 @@ limitations under the License.
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/Support/raw_ostream.h"
+#include "../JsonObjects.h"
+#include <iomanip>
+
 // #include "../analyzer.h"
 // #include "frontends/common/model.h"
 
@@ -102,6 +105,10 @@ header_type getBasicHeaderType(cstring);
 void insertInMetaMap();
 bool isSMeta(cstring);
 cstring getFromMetaMap(cstring);
+void emitErrors(LLBMV2::JsonObjects*);
+void emitFieldAliases(LLBMV2::JsonObjects*);
+cstring getOpcodeSym(cstring op);
+Util::IJson *getJsonExp(llvm::Value *inst);
 
 
 // cstring stringRepr(mpz_class value, unsigned bytes = 0);

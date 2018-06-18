@@ -23,7 +23,7 @@ using namespace LLVMJsonBackend;
 
 namespace LLBMV2 {
 
-Util::IJson* ControlConverter::convertTable(CallInst *apply_call,
+Util::JsonObject* ControlConverter::convertTable(CallInst *apply_call,
                                             cstring table_name,
                                             cstring nex_table_name) {
     auto table = new Util::JsonObject();
@@ -155,46 +155,160 @@ Util::IJson* ControlConverter::convertTable(CallInst *apply_call,
     return table;
 }
 
+cstring ControlConverter::getApplyCallName(BasicBlock *bb)  {
+    for(auto I = bb->begin(); I != bb->end(); I++) {
+        auto inst = &*I;
+        if(auto call_inst = dyn_cast<CallInst>(inst)) {
+            if (call_inst->getCalledFunction()->getName().contains("apply_")) {
+                return call_inst->getCalledFunction()->getName().split("_").second.str().c_str();
+            }
+        }
+    }
+    return nullptr;
+}
+
+void ControlConverter::convertConditional(BranchInst *bi, Util::JsonArray* conditionals) {
+    if(condMap.find(bi->getParent()) != condMap.end())
+        return;
+    auto conditional = new Util::JsonObject();
+    auto cond_name = genName("cond_");
+    condMap[bi->getParent()] = cond_name;
+    conditional->emplace("name", cond_name);
+    conditional->emplace("id", nextId("conditionals"));
+    conditional->emplace("source_info", Util::JsonValue::null);
+    auto pred = getJsonExp(bi->getCondition());
+    conditional->emplace("expression", pred);
+    bool found_apply = false;
+    cstring true_branch, false_branch;
+    true_branch = getApplyCallName(bi->getSuccessor(0));
+    if(true_branch != nullptr)
+        found_apply = true;
+
+    if(!found_apply && bi->getSuccessor(0)->getTerminator()->getNumSuccessors() > 1) {
+        convertConditional(dyn_cast<BranchInst>(bi->getSuccessor(0)->getTerminator()), conditionals);
+        true_branch = condMap[bi->getSuccessor(0)];
+    } else if(!found_apply && bi->getSuccessor(0)->getTerminator()->getNumSuccessors() == 1) {
+        auto bb = bi->getSuccessor(0)->getTerminator()->getSuccessor(0);
+        while(bb) {
+            if(getApplyCallName(bb) != nullptr) {
+                true_branch = getApplyCallName(bb);
+                bb = nullptr;
+            } else if(isa<ReturnInst>(bb->getTerminator())) {
+                true_branch = "";
+                bb = nullptr;
+            } else if (auto bbi = dyn_cast<BranchInst>(bb->getTerminator())) {
+                if(bbi->isConditional()) {
+                    convertConditional(bbi, conditionals);
+                    true_branch = condMap[bb];
+                    bb = nullptr;
+                } else {
+                    bb = bb->getTerminator()->getSuccessor(0);
+                }
+            }
+        }
+    }
+    if(true_branch == nullptr)
+        conditional->emplace("true_next", Util::JsonValue::null);
+    else
+        conditional->emplace("true_next", true_branch);
+    found_apply = false;
+    false_branch = getApplyCallName(bi->getSuccessor(1));
+    if(false_branch != nullptr)
+        found_apply = true;
+    if(!found_apply && bi->getSuccessor(1)->getTerminator()->getNumSuccessors() > 1) {
+        convertConditional(dyn_cast<BranchInst>(bi->getSuccessor(1)->getTerminator()), conditionals);
+        false_branch = condMap[bi->getSuccessor(1)];
+    } else if(!found_apply && bi->getSuccessor(1)->getTerminator()->getNumSuccessors() == 1) {
+        auto bb = bi->getSuccessor(1)->getTerminator()->getSuccessor(0);
+        while(bb) {
+            if(getApplyCallName(bb) != nullptr) {
+                false_branch = getApplyCallName(bb);
+                bb = nullptr;
+            } else if(isa<ReturnInst>(bb->getTerminator())) {
+                false_branch = "";
+                bb = nullptr;
+            } else if (auto bbi = dyn_cast<BranchInst>(bb->getTerminator())) {
+                if(bbi->isConditional()) {
+                    convertConditional(bbi, conditionals);
+                    false_branch = condMap[bb];
+                    bb = nullptr;
+                } else {
+                    bb = bb->getTerminator()->getSuccessor(0);
+                }
+            }
+        }
+    }
+    if(false_branch == nullptr)
+        conditional->emplace("false_next", Util::JsonValue::null);
+    else
+        conditional->emplace("false_next", false_branch);
+    conditionals->append(conditional);
+    return;
+}
+
 void ControlConverter::processControl(Function* F) {
     auto pipeline = new Util::JsonObject();
     pipeline->emplace("name", F->getName());
     pipeline->emplace("id", nextId("control"));
     pipeline->emplace("source_info", Util::JsonValue::null);
+    auto conditionals = mkArrayField(pipeline, "conditionals");
     std::vector<CallInst*> *apply_calls = new std::vector<CallInst*>();
-    for(auto c = inst_begin(F); c != inst_end(F); c++) {
-        if(auto cinst = dyn_cast<CallInst>(&*c))
-            if(cinst->getCalledFunction()->getName().contains("apply_"))
-                apply_calls->push_back(cinst);
-    }
-    cstring cur_table_name, nex_table_name;
-    if(apply_calls->size() == 0) {
-        pipeline->emplace("init_table", Util::JsonValue::null);
-    }
-    else {
-        // cur_table_name = genName("table_");
-        auto apply_call_name = (*(apply_calls->begin()))->getCalledFunction()->getName();
-        cur_table_name = apply_call_name.split("_").second.str().c_str();
-        pipeline->emplace("init_table", cur_table_name);
-    }
-    // Addition of tables start here
+    bool init_table_set = false;
+    bool hasConditional = false;
     auto tables = mkArrayField(pipeline, "tables");
-    for(auto cinst = apply_calls->begin(); cinst != apply_calls->end(); cinst++) {
-        Util::IJson* ret;
-        if((cinst+1) == apply_calls->end()) {
-            ret = convertTable(*cinst, cur_table_name, cstring::empty);
-        } else {
-            // nex_table_name = genName("table_");
-            nex_table_name = ((cinst+1) != apply_calls->end())? (*(cinst+1))->getCalledFunction()->getName().split("_").second.str().c_str() : "";
-            ret = convertTable(*cinst, cur_table_name, nex_table_name);
+    for(auto BB = F->begin(); BB != F->end(); BB++) {
+        apply_calls->clear();
+        hasConditional = false;
+        auto bb = &*BB;
+        for(auto c = bb->begin(); c != bb->end(); c++) {
+            if(auto cinst = dyn_cast<CallInst>(&*c))
+                if(cinst->getCalledFunction()->getName().contains("apply_"))
+                    apply_calls->push_back(cinst);
         }
-        tables->append(ret);
-        cur_table_name = nex_table_name;
+        cstring cur_table_name, nex_table_name;
+
+        if(apply_calls->size() == 0) {
+            if(isa<ReturnInst>(bb->getTerminator()) && !init_table_set)
+                if(!init_table_set) {
+                    pipeline->emplace("init_table", Util::JsonValue::null);
+                    init_table_set = true;
+                }
+        } else {
+            auto apply_call_name = (*(apply_calls->begin()))->getCalledFunction()->getName();
+            cur_table_name = apply_call_name.split("_").second.str().c_str();
+            if (!init_table_set) {
+                pipeline->emplace("init_table", cur_table_name);
+                init_table_set = true;
+            }
+        }
+        // Addtion of conditional start here
+        bool found_apply = false;
+        if (bb->getTerminator()->getNumSuccessors() > 1) {
+            hasConditional = true;
+            if(condMap.find(bb) == condMap.end()) {
+                convertConditional(dyn_cast<BranchInst>(bb->getTerminator()), conditionals);
+            }
+            if(!init_table_set) {
+                init_table_set = true;
+                pipeline->emplace("init_table", condMap[bb]);
+            }
+        } else if (bb->getTerminator()->getNumSuccessors() == 1) {}
+
+        // Addition of tables start here
+        Util::JsonObject* ret;
+        for(auto cinst = apply_calls->begin(); cinst != apply_calls->end(); cinst++) {
+            if((cinst+1) == apply_calls->end()) {
+                ret = convertTable(*cinst, cur_table_name, (hasConditional)? condMap[bb] : cstring::empty);
+            } else {
+                nex_table_name = (*(cinst+1))->getCalledFunction()->getName().split("_").second.str().c_str();
+                ret = convertTable(*cinst, cur_table_name, nex_table_name);
+            }
+            tables->append(ret);
+            cur_table_name = nex_table_name;
+        }
     }
     // Addition of action_profiles
     auto action_profiles = mkArrayField(pipeline, "action_profiles");
-
-    // Addition of conditionals
-    auto conditionals = mkArrayField(pipeline, "conditionals");
 
     json->pipelines->append(pipeline);
 }
@@ -221,28 +335,8 @@ cstring ChecksumConverter::createCalculation(cstring algo, std::vector<Value*> a
     return  calcName;
 }
 
-// void ChecksumConverter::processVerifyChecksum(Funtion *F) {
-
-// }
-
 void ChecksumConverter::processChecksum(Function *F) {
-    // auto it = backend->update_checksum_controls.find(block->container->name);
-    // if (it != backend->update_checksum_controls.end()) {
-    //     if (backend->target == Target::SIMPLE) {
-    //         P4V1::SimpleSwitch* ss = backend->getSimpleSwitch();
-    //         ss->convertChecksum(block->container->body, backend->json->checksums,
-    //                             backend->json->calculations, false);
-    //     }
-    // } else {
-    //     it = backend->verify_checksum_controls.find(block->container->name);
-    //     if (it != backend->verify_checksum_controls.end()) {
-    //         if (backend->target == Target::SIMPLE) {
-    //             P4V1::SimpleSwitch* ss = backend->getSimpleSwitch();
-    //             ss->convertChecksum(block->container->body, backend->json->checksums,
-    //                                 backend->json->calculations, true);
-    //         }
-    //     }
-    // }
+
     for(auto inst = inst_begin(F); inst != inst_end(F); inst++) {
         Instruction *I = &*inst;
         if(isa<CallInst>(&*inst) && inst->getType()->isVoidTy()) {

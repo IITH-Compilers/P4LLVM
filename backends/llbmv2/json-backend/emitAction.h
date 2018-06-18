@@ -34,7 +34,7 @@ class ConvertActions {
 
     void convertActionBody(llvm::Function *F, Util::JsonArray *body);
     void convertActionParams(llvm::Function *F, Util::JsonArray* params);
-    Util::IJson* getJsonExp(llvm::Value *inst);
+    // Util::IJson* getJsonExp(llvm::Value *inst);
     bool isAssignment(llvm::StoreInst*);
     unsigned getRuntimeID(cstring paramName) {
         if(actionParamMap.find(paramName) == actionParamMap.end())

@@ -33,10 +33,13 @@ namespace LLBMV2 {
 
 class ControlConverter {
     LLBMV2::JsonObjects* json;
+    std::map<llvm::BasicBlock*, cstring> condMap;
  
- Util::IJson* convertTable(llvm::CallInst *apply_call,
+ Util::JsonObject* convertTable(llvm::CallInst *apply_call,
                             cstring cur_table_name,
                             cstring nex_table_name);
+void convertConditional(llvm::BranchInst*, Util::JsonArray*);
+cstring getApplyCallName(llvm::BasicBlock *bb);
  public:
     void processControl(llvm::Function* F);
     explicit ControlConverter(LLBMV2::JsonObjects* j) : json(j) {}
