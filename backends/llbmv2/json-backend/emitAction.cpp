@@ -198,8 +198,8 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
             auto right = new Util::JsonObject();
             auto right_val = getJsonExp(assign->getOperand(0));
             auto right_param = getFieldName(assign->getOperand(0));
-            if(strlen(right_param) > 0 && isActionParam(right_param)) {
-                auto id = getRuntimeID(right_param);
+            if(strlen(right_param) > 0 && isActionParam(right_param.c_str())) {
+                auto id = getRuntimeID(right_param.c_str());
                 right->emplace("type", "runtime_data");
                 right->emplace("value", id);
                 parameters->append(right);
