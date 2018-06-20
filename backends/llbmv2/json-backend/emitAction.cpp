@@ -205,9 +205,10 @@ ConvertActions::convertActionBody(Function * F, Util::JsonArray * result)
                 parameters->append(right);
             }
             else {
-                // right->emplace("type", "field");
-                // right->emplace("value", right_val);
-                parameters->append(right_val);
+                auto right_exp = new Util::JsonObject();
+                right_exp->emplace("type", "expression");
+                right_exp->emplace("value", right_val);
+                parameters->append(right_exp);
             }
             continue;
         }

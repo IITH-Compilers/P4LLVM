@@ -440,7 +440,7 @@ Util::IJson *getJsonExp(Value *inst)
         result_ex->emplace("type", "expression");
         result_ex->emplace("value", result);
         std::stringstream stream;
-        stream << "0x" << std::setfill('0') << std::setw(bw / 8) << std::hex << -1;//(std::pow(2, bw) - 1);
+        stream << "0x" << std::setfill('0') << std::setw(bw/4) << std::hex << ((1 << bw) - 1);
         auto trunc = new Util::JsonObject();
         trunc->emplace("op", "&");
         trunc->emplace("left", result_ex);
@@ -451,10 +451,10 @@ Util::IJson *getJsonExp(Value *inst)
         auto trunc_exp = new Util::JsonObject();
         trunc_exp->emplace("type", "expression");
         trunc_exp->emplace("value", trunc);
-        auto trunc_exp_exp = new Util::JsonObject();
-        trunc_exp_exp->emplace("type", "expression");
-        trunc_exp_exp->emplace("value", trunc_exp);
-        return trunc_exp_exp;
+        // auto trunc_exp_exp = new Util::JsonObject();
+        // trunc_exp_exp->emplace("type", "expression");
+        // trunc_exp_exp->emplace("value", trunc_exp);
+        return trunc_exp;
     }
     else if (auto sel = dyn_cast<SelectInst>(inst))
     {
@@ -518,7 +518,7 @@ Util::IJson *getJsonExp(Value *inst)
     {
         std::stringstream stream;
         stream << "0x" << std::setfill('0') << std::setw(cnst->getBitWidth() / 4)
-               << std::hex << cnst->getSExtValue();
+               << std::hex << (cnst->getSExtValue() & ((1 << cnst->getBitWidth())-1));
         result->emplace("type", "hexstr");
         result->emplace("value", stream.str().c_str());
         return result;
@@ -542,7 +542,7 @@ Util::IJson *getJsonExp(Value *inst)
         result->emplace("op", "&");
         result->emplace("left", left);
         std::stringstream stream;
-        stream << "0x" << std::setfill('0') << std::setw(bw / 4) << std::hex << std::pow(2, bw) - 1;
+        stream << "0x" << std::setfill('0') << std::setw(bw / 4) << std::hex << ((1 << bw) - 1);
         auto trunc_val = new Util::JsonObject();
         trunc_val->emplace("type", "hexstr");
         trunc_val->emplace("value", stream.str().c_str());
