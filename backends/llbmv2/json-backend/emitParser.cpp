@@ -366,38 +366,63 @@ bool ParserConverter::processParser(llvm::Function *F) {
                             stream << "0x" << std::setfill('0') << std::setw(dyn_cast<ConstantInt>(icmp->getOperand(1))->getBitWidth()/4) << std::hex
                                    << jmpVal;
                             std::string jmpVal_hex(stream.str());
+
+                            auto trans1 = new Util::JsonObject();
+                            trans1->emplace("value", jmpVal_hex);
+                            trans1->emplace("mask", Util::JsonValue::null);
                             if (dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "accept" ||
                                 dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "reject") {
-                                auto trans1 = new Util::JsonObject();
-                                trans1->emplace("value", "default");
-                                trans1->emplace("mask", Util::JsonValue::null);
-                                trans1->emplace("next_state", Util::JsonValue::null);
-                                json->add_parser_transition(state_id, trans1);
-
-                                auto trans2 = new Util::JsonObject();
-                                trans2->emplace("value", jmpVal_hex);
-                                trans2->emplace("mask", Util::JsonValue::null);
-                                auto next_state = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
-                                trans2->emplace("next_state", next_state);
-                                json->add_parser_transition(state_id, trans2);
-                            } else if(dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "accept" ||
-                                dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "reject") {
-                                auto trans1 = new Util::JsonObject();
-                                trans1->emplace("value", "default");
-                                trans1->emplace("mask", Util::JsonValue::null);
-                                trans1->emplace("next_state", Util::JsonValue::null);
-                                json->add_parser_transition(state_id, trans1);
-
-                                auto trans2 = new Util::JsonObject();
-                                trans2->emplace("value", jmpVal_hex);
-                                trans2->emplace("mask", Util::JsonValue::null);
-                                auto next_state = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
-                                trans2->emplace("next_state", next_state);
-                                json->add_parser_transition(state_id, trans2);
+                                trans1->emplace("next_stage", Util::JsonValue::null);
                             } else {
-                                assert(false && "condtional branch is not expected when there is no default state(accept/reject)");
-                                return false;
+                                auto next_stage = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
+                                trans1->emplace("next_stage", next_stage);
                             }
+                            json->add_parser_transition(state_id, trans1);
+
+                            auto trans2 = new Util::JsonObject();
+                            trans2->emplace("value", "default");
+                            trans2->emplace("mask", Util::JsonValue::null);
+                            if (dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "accept" ||
+                                dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "reject") {
+                                trans2->emplace("next_stage", Util::JsonValue::null);
+                            } else {
+                                auto next_stage = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
+                                trans2->emplace("next_stage", next_stage);
+                            }
+                            json->add_parser_transition(state_id, trans2);
+
+                            // if (dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "accept" ||
+                            //     dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "reject") {
+                            //     auto trans1 = new Util::JsonObject();
+                            //     trans1->emplace("value", jmpVal_hex);
+                            //     trans1->emplace("mask", Util::JsonValue::null);
+                            //     auto next_state = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
+                            //     trans1->emplace("next_state", Util::JsonValue::null);
+                            //     json->add_parser_transition(state_id, trans1);
+
+                            //     auto trans2 = new Util::JsonObject();
+                            //     trans2->emplace("value", "default");
+                            //     trans2->emplace("mask", Util::JsonValue::null);
+                            //     trans2->emplace("next_state", next_state);
+                            //     json->add_parser_transition(state_id, trans2);
+                            // } else if(dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "accept" ||
+                            //     dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "reject") {
+                            //     auto trans1 = new Util::JsonObject();
+                            //     trans1->emplace("value", "default");
+                            //     trans1->emplace("mask", Util::JsonValue::null);
+                            //     trans1->emplace("next_state", Util::JsonValue::null);
+                            //     json->add_parser_transition(state_id, trans1);
+
+                            //     auto trans2 = new Util::JsonObject();
+                            //     trans2->emplace("value", jmpVal_hex);
+                            //     trans2->emplace("mask", Util::JsonValue::null);
+                            //     auto next_state = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
+                            //     trans2->emplace("next_state", next_state);
+                            //     json->add_parser_transition(state_id, trans2);
+                            // } else {
+                            //     assert(false && "condtional branch is not expected when there is no default state(accept/reject)");
+                            //     return false;
+                            // }
                         }
                         else {
                             assert(false && "non equality in parser branch conditon, should not happen");
