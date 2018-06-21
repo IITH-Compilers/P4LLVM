@@ -292,13 +292,38 @@ void ControlConverter::processControl(Function* F) {
                 init_table_set = true;
                 pipeline->emplace("init_table", condMap[bb]);
             }
-        } else if (bb->getTerminator()->getNumSuccessors() == 1) {}
+        } else if (bb->getTerminator()->getNumSuccessors() == 1) {
+            auto succr = bb->getTerminator()->getSuccessor(0);
+            while(1) {
+                if(getApplyCallName(succr) != nullptr) {
+                    condMap[bb] = getApplyCallName(succr);
+                    break;
+                }else if(succr->getTerminator()->getNumSuccessors() > 1) {
+                    if(condMap.find(bb) == condMap.end()) {
+                        convertConditional(dyn_cast<BranchInst>(succr->getTerminator()), conditionals);
+                        condMap[bb] = condMap[succr];
+                    }
+                    break;
+                }else if(succr->getTerminator()->getNumSuccessors() == 1){
+                    succr = succr->getTerminator()->getSuccessor(0);
+                } else{
+                    if(isa<ReturnInst>(succr->getTerminator()))
+                        condMap[bb] = cstring::empty;
+                    else
+                        assert(false && "unknown case");
+                    break;
+                }
+            }
+        }
 
         // Addition of tables start here
         Util::JsonObject* ret;
         for(auto cinst = apply_calls->begin(); cinst != apply_calls->end(); cinst++) {
             if((cinst+1) == apply_calls->end()) {
-                ret = convertTable(*cinst, cur_table_name, (hasConditional)? condMap[bb] : cstring::empty);
+                if(condMap.find(bb) != condMap.end() && condMap[bb] != cstring::empty)
+                   ret = convertTable(*cinst, cur_table_name, condMap[bb]);
+                else
+                   ret = convertTable(*cinst, cur_table_name, cstring::empty);
             } else {
                 nex_table_name = (*(cinst+1))->getCalledFunction()->getName().split("_").second.str().c_str();
                 ret = convertTable(*cinst, cur_table_name, nex_table_name);
