@@ -40,6 +40,8 @@ limitations under the License.
 #include "scopeTable.h"
 #include <dlfcn.h>
 #include "json-backend/llvm-json.h"
+#include "json-backend/redundantStoreElimination.h"
+
 
 namespace LLBMV2 {
 
@@ -240,7 +242,9 @@ public:
     void runLLVMPasses(BMV2Options &options)
     {
         legacy::PassManager MPM;
+        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
         if(options.optimize) {
+            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Optimizing code" << std::endl;
 
             std::unique_ptr<legacy::FunctionPassManager> FPM;
             FPM.reset(new legacy::FunctionPassManager(TheModule.get()));
@@ -249,12 +253,14 @@ public:
             PMBuilder.SizeLevel = 2;
             PMBuilder.populateFunctionPassManager(*FPM);
             PMBuilder.populateModulePassManager(MPM);
+            MPM.add(createAggressiveDCEPass());
+            FPM->add(createStoreEliminationPass());
+            // FPM.add();
             FPM->doInitialization();
             for (Function &F : *TheModule)
                 FPM->run(F);
             FPM->doFinalization();
         }
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
         // TheModule->dump();
         // MPM.add((*JsonBackend)());
         MPM.add(createJsonBackendPass(options.outputFile));

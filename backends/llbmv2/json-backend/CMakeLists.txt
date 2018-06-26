@@ -15,6 +15,7 @@ add_library(LLVMJsonBackend STATIC
     helpers.cpp
     emitAction.cpp
     emitControl.cpp
+    redundantStoreElimination.cpp
 )
 
 # Use C++11 to compile your pass (i.e., supply -std=c++11).

@@ -372,10 +372,10 @@ bool ParserConverter::processParser(llvm::Function *F) {
                             trans1->emplace("mask", Util::JsonValue::null);
                             if (dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "accept" ||
                                 dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "reject") {
-                                trans1->emplace("next_stage", Util::JsonValue::null);
+                                trans1->emplace("next_state", Util::JsonValue::null);
                             } else {
                                 auto next_stage = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
-                                trans1->emplace("next_stage", next_stage);
+                                trans1->emplace("next_state", next_stage);
                             }
                             json->add_parser_transition(state_id, trans1);
 
@@ -384,10 +384,10 @@ bool ParserConverter::processParser(llvm::Function *F) {
                             trans2->emplace("mask", Util::JsonValue::null);
                             if (dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "accept" ||
                                 dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "reject") {
-                                trans2->emplace("next_stage", Util::JsonValue::null);
+                                trans2->emplace("next_state", Util::JsonValue::null);
                             } else {
                                 auto next_stage = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
-                                trans2->emplace("next_stage", next_stage);
+                                trans2->emplace("next_state", next_stage);
                             }
                             json->add_parser_transition(state_id, trans2);
 
