@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +19,6 @@ limitations under the License.
 #ifndef _BACKENDS_LLBMV2_HELPERS_H_
 #define _BACKENDS_LLBMV2_HELPERS_H_
 
-// #include "ir/ir.h"
 #include "lib/cstring.h"
 #include "lib/json.h"
 #include "lib/ordered_map.h"
@@ -29,50 +30,8 @@ limitations under the License.
 #include "../JsonObjects.h"
 #include <iomanip>
 
-// #include "../analyzer.h"
-// #include "frontends/common/model.h"
-
 namespace LLVMJsonBackend {
 
-/// constant used in LLBMV2 backend code generation
-// class TableImplementation {
-//  public:
-//     static const cstring actionProfileName;
-//     static const cstring actionSelectorName;
-//     static const cstring directCounterName;
-//     static const cstring directMeterName;
-//     static const cstring counterName;
-// };
-
-// class MatchImplementation {
-//  public:
-//     static const cstring selectorMatchTypeName;
-//     static const cstring rangeMatchTypeName;
-// };
-
-// class TableAttributes {
-//  public:
-//     static const cstring implementationName;
-//     static const cstring sizeName;
-//     static const cstring supportTimeoutName;
-//     static const unsigned defaultTableSize;
-//     static const cstring countersName;
-//     static const cstring metersName;
-// };
-
-// class V1ModelProperties {
-//  public:
-//     static const cstring jsonMetadataParameterName;
-
-//     /// The name of BMV2's valid field. This is a hidden bit<1> field
-//     /// automatically added by BMV2 to all header types; reading from it tells
-//     /// you whether the header is valid, just as if you had called isValid().
-//     static const cstring validField;
-// };
-
-// using ErrorValue = unsigned int;
-// using ErrorCodesMap = ordered_map<const IR::IDeclaration *, ErrorValue>;
-// using BlockTypeMap = std::map<const IR::Block*, const IR::Type*>;
 static std::map<llvm::Instruction *, std::string> allocaMap;
 static std::map<cstring ,cstring> headerMap[3];
 static std::map<cstring, cstring> metaMap;
@@ -110,8 +69,6 @@ void emitFieldAliases(LLBMV2::JsonObjects*);
 cstring getOpcodeSym(cstring op);
 Util::IJson *getJsonExp(llvm::Value *inst);
 
-
-// cstring stringRepr(mpz_class value, unsigned bytes = 0);
 unsigned nextId(cstring group);
 
 }  // namespace LLBMV2

@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,15 +31,9 @@ limitations under the License.
 using namespace LLVMJsonBackend;
 namespace LLBMV2 {
 
-// class Backend;
-
 class ConvertHeaders {
-    // Backend*             backend;
     cstring              scalarsName;
     cstring              scalarsTypeName;
-    // P4::ReferenceMap*    refMap;
-    // P4::TypeMap*         typeMap;
-    // JsonObjects*         json;
     std::vector<cstring>    visitedHeaders;
 
     const unsigned       boolWidth = 1;    // convert booleans to 1-bit integers

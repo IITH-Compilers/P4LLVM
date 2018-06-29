@@ -78,9 +78,9 @@ class ScopeTable{
     void printAll() {           
         for(auto vitr = dict.begin(); vitr!=dict.end();vitr++) {
             typename std::map <std::string, T> map(vitr->begin(), vitr->end());
-            std::cout<<"\nmap\n--------\n";
+            // std::cout<<"\nmap\n--------\n";
             for(auto mitr = map.begin(); mitr!=map.end(); mitr++)   {
-                std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";
+                // std::cout<<"\n" << mitr->first << "\t-\t" << mitr->second <<"\n";
             }
             
         }

@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,8 +16,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// #include "ir/ir.h"
-// #include "backend.h"
 #include "emitHeader.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -24,7 +24,6 @@ using namespace LLVMJsonBackend;
 
 namespace LLBMV2 {
 
-// TODO(hanw): remove
 Util::JsonArray* ConvertHeaders::pushNewArray(Util::JsonArray* parent) {
     auto result = new Util::JsonArray();
     parent->append(result);
@@ -44,7 +43,6 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                 std::map<llvm::StructType *, std::string> *struct2Type,
                 JsonObjects *json, bool meta) {
     for (auto f : type->elements()) {
-        // auto ft = typeMap->getType(f, true);
         if (f->isStructTy()) {
                 // The headers struct can not contain nested structures.
             auto st = dyn_cast<StructType>(f);
@@ -88,14 +86,13 @@ void ConvertHeaders::addTypesAndInstances(llvm::StructType *type,
                     json->add_union(header_type, fields, header_name);
                     setHeaderType(header_name, header_type, Union);
                 } else {
-                    // BUG("Unexpected type %1%", ft);
                     errs() << "Unexpected type " << ft->getName() << "\n";
                     exit(1);
                 }
             }
         } else if (f->isArrayTy() && f->getArrayElementType()->isStructTy()) {
             // Header stack type done elsewhere
-            errs() << "stack generation done elsewhere\n";
+            // errs() << "stack generation done elsewhere\n";
             continue;
         } else {
             // Treat this field like a scalar local variable
@@ -137,10 +134,8 @@ void ConvertHeaders::addHeaderStacks(llvm::StructType *headersStruct,
                                     std::map<llvm::StructType *, std::string> *struct2Type,
                                     JsonObjects *json)
 {
-    // LOG1("Creating stack " << headersStruct);
     unsigned fieldCount = 0;
     for (auto f : headersStruct->elements()) {
-        // auto ft = typeMap->getType(f, true);
         if(!f->isArrayTy())
             continue;
         else if(f->isArrayTy() && !f->getArrayElementType()->isStructTy()) {
@@ -148,8 +143,6 @@ void ConvertHeaders::addHeaderStacks(llvm::StructType *headersStruct,
                     << " not a struct type\n";
             exit(1);
         }
-        // auto ft = dyn_cast<StructType>(f);
-        // assert(ft != nullptr && "This should not happen");
         auto stack_name = headersStruct->getName().str() + ".field_" + std::to_string(fieldCount++);
         auto stack_size = f->getArrayNumElements();
         auto ht = dyn_cast<StructType>(f->getArrayElementType());
@@ -199,7 +192,6 @@ void ConvertHeaders::addHeaderType(llvm::StructType *st,
                                    std::map<llvm::StructType *, std::string> *struct2Type,
                                    JsonObjects *json)
 {
-    // cstring name = st->controlPlaneName();
     cstring name = (cstring)st->getName();
     if(name == "struct.standard_metadata_t")
         name = "standard_metadata";
@@ -317,14 +309,11 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
                 json->add_metadata(metadata_type, allocaName);
             }
             addHeaderType(st, struct2Type, json);
-        // } else if (auto stack = type->to<IR::Type_Stack>()) {
         } else if (type->isArrayTy() && type->getArrayElementType()->isStructTy()) {
             // Handle header stack
             // assert(false && "Header_stack is not yet handled");
             auto ht = dyn_cast<StructType>(type->getArrayElementType());
-            // BUG_CHECK(type->is<IR::Type_Header>(), "%1% not a header type", stack->elementType);
             assert((*struct2Type)[ht] == "header" && "not a header type");
-            // auto ht = type->to<IR::Type_Header>();
             addHeaderType(ht, struct2Type, json);
             cstring header_type = ht->getName().str();
             std::vector<unsigned> header_ids;
@@ -376,8 +365,8 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
             // P4C_UNIMPLEMENTED("%1%: type not yet handled on this target", type);
             if(v->getParent()->getParent()->getAttributes().getFnAttributes().hasAttribute("action"))
                 continue;
-            llvm::errs() << "inst is : " << *v << "\n";
-            llvm::errs() << type->getTypeID() << " : type is not handled\n";
+            errs() << "inst is : " << *v << "\n";
+            errs() << type->getTypeID() << " : type is not handled\n";
             assert(false && "Type not handled");
         }
         setAllocaName(v, allocaName);
@@ -387,7 +376,6 @@ void ConvertHeaders::processHeaders(llvm::SmallVector<llvm::AllocaInst *, 8> *al
     // json->add_metadata(scalarsTypeName, scalarsName);
     json->add_metadata(scalarsTypeName, "scalars");
     json->add_metadata("standard_metadata", "standard_metadata");
-    // return Inspector::init_apply(node);
 }
 
 // void ConvertHeaders::end_apply(const IR::Node*) {
@@ -424,13 +412,12 @@ bool ConvertHeaders::processParams(llvm::StructType *st,
                 JsonObjects *json)
 {
     //// keep track of which headers we've already generated the json for
-    // if (visitedHeaders.find(st->getName()) != visitedHeaders.end())
-    if(std::find(visitedHeaders.begin(), visitedHeaders.end(), st->getName().str()) != visitedHeaders.end())
+    if(std::find(visitedHeaders.begin(), visitedHeaders.end(),
+                st->getName().str()) != visitedHeaders.end())
         return false;  // already seen
     else
         visitedHeaders.push_back(st->getName().str());
 
-    // if (st->getAnnotation("metadata")) {
     if (st->getName().str() == "struct.standard_metadata_t") {
         addHeaderType(st, struct2Type, json);
     }

@@ -102,12 +102,12 @@ int main(int argc, char *const argv[]) {
     try {
         backend.addDebugHook(hook);
         backend.process(toplevel, options);
-        std::cout << "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n";
+        // std::cout << "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n";
         backend.convert(options);
         backend.addMetaData();
         backend.dumpLLVMIR();
         backend.runLLVMPasses(options);
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~After Backend pass in bmv2.cpp\n";
+        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~After Backend pass in bmv2.cpp\n";
         // log_dump1(toplevel,"From backend of bmv2");
     } catch (const Util::P4CExceptionBase &bug) {
         std::cerr << bug.what() << std::endl;

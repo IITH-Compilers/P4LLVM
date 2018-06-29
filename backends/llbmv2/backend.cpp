@@ -130,7 +130,7 @@ Backend::process(const IR::ToplevelBlock* tlb, BMV2Options& options) {
         new VisitFunctor([this, evaluator]() { toplevel = evaluator->getToplevelBlock(); }),
     });
     const IR::P4Program* prog = tlb->getProgram()->apply(*this);
-    log_dump1(prog,"From backend of bmv2");
+    // log_dump1(prog,"From backend of bmv2");
     
 }
 
@@ -167,16 +167,16 @@ void Backend::convert(BMV2Options& options) {
     json->add_meta_info();
 
     // convert all enums to json
-    std::cout << "enums follow:\n";
+    // std::cout << "enums follow:\n";
     for (const auto &pEnum : *enumMap) {
         auto name = pEnum.first->getName();
-        std::cout<< "enum -- "<<name<<" \n";
+        // std::cout<< "enum -- "<<name<<" \n";
         for (const auto &pEntry : *pEnum.second) {
             json->add_enum(name, pEntry.first, pEntry.second);
-            std::cout << pEntry.first << "---" << pEntry.second << "\n";
+            // std::cout << pEntry.first << "---" << pEntry.second << "\n";
         }
     }
-    std::cout << "----------------enums end-------------------\n";
+    // std::cout << "----------------enums end-------------------\n";
 
     if (::errorCount() > 0)
         return;
@@ -253,7 +253,7 @@ bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
 
 llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
     assert(t != nullptr && "Type cannot be empty");
-    std::cout << "in gct -- " << t->toString() <<"\n";
+    // std::cout << "in gct -- " << t->toString() <<"\n";
     if(t->is<IR::Type_Void>()) {
         return llvm::Type::getVoidTy(TheContext);
     }
@@ -290,12 +290,12 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
 
     // Derived Types
     else if(t->is<IR::Type_Name>()) {
-        std::cout << "in type name "<<*t<<"\n";
+        // std::cout << "in type name "<<*t<<"\n";
         if(defined_type[t->toString()]) {
-            std::cout << "returning from presence\n";
+            // std::cout << "returning from presence\n";
             return(defined_type[t->toString()]);
         }
-        std::cout << "element not present\n";
+        // std::cout << "element not present\n";
         auto canon = typeMap->getTypeType(t, true);
         defined_type[t->toString()] = getCorrespondingType(canon);
         return defined_type[t->toString()];

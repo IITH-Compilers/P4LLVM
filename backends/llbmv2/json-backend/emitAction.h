@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,19 +46,12 @@ class ConvertActions {
     void setRuntimeID(cstring paramName, unsigned id) {
         if(actionParamMap.find(paramName) == actionParamMap.end())
             actionParamMap[paramName] = id;
-        // else {
-        //     llvm::errs() << "ERROR : " << "Action param already exit in actionParamMap\n";
-        //     exit(1);
-        // }
-            
     }
     void addToActionParamList(cstring paramName) {
         if (std::find(actionParamList.begin(), actionParamList.end(), paramName)
             == actionParamList.end())
             actionParamList.push_back(paramName);
         llvm::errs() << "Action Param listed: " << paramName << "\n";
-        // else
-            // assert(false && "Param already exist in list");
     }
     bool isActionParam(cstring paramName) {
         llvm::errs() << "Action param asked for: " << paramName << "\n";

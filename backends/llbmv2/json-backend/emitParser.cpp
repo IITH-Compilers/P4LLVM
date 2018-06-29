@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,62 +29,6 @@ using namespace llvm;
 using namespace LLVMJsonBackend;
 
 namespace LLBMV2 {
-
-// cstring ParserConverter::getBinaryOperation(BinaryOperator *inst) {
-//     return inst->getOpcodeName();
-// }
-
-// Util::IJson* ParserConverter::getJsonExp(Value *inst) {
-//     auto result = new Util::JsonObject();
-//     if(auto bo = dyn_cast<BinaryOperator>(inst)) {
-//         // cstring op = getBinaryOperation(bo);
-//         cstring op = bo->getOpcodeName();
-//         result->emplace("op", op);
-//         auto left = getJsonExp(bo->getOperand(0));
-//         auto right = getJsonExp(bo->getOperand(1));
-//         result->emplace("left", left);
-//         result->emplace("right", right);
-//         // auto fin = new Util::JsonObject();
-//         assert(inst->getType()->isIntegerTy() && "should be an integer type");
-//         unsigned bw = inst->getType()->getIntegerBitWidth();
-//         auto result_ex = new Util::JsonObject();
-//         result_ex->emplace("type", "expression");
-//         result_ex->emplace("value", result);
-//         std::stringstream stream;
-//         stream << std::hex << (std::pow(2, bw)-1);
-//         auto trunc = new Util::JsonObject();
-//         trunc->emplace("left", result_ex);
-//         auto trunc_val = new Util::JsonObject();
-//         trunc_val->emplace("hexstr", stream.str().c_str());
-//         trunc->emplace("right", trunc_val);
-//         trunc->emplace("op", "&");
-//         auto trunc_exp = new Util::JsonObject();
-//         trunc_exp->emplace("type", "expression");
-//         trunc_exp->emplace("value", trunc);
-//         return trunc_exp;
-//     }
-//     else if(auto cnst = dyn_cast<ConstantInt>(inst)) {
-//         std::stringstream stream;
-//         stream << std::hex << cnst->getSExtValue();
-//         result->emplace("hexstr", stream.str().c_str());
-//         return result;
-//     }
-//     else if (auto ld = dyn_cast<LoadInst>(inst)) {
-//         auto headername = new Util::JsonArray();
-//         getFieldName(ld->getOperand(0), headername);
-//         result->emplace("field", headername);
-//         return result;
-//     }
-//     else if (auto bc = dyn_cast<BitCastInst>(inst)) {
-//         return getJsonExp(bc->getOperand(0));
-//     }
-//     else {
-//         errs() << *inst << "\n" << "ERROR : Unhandled instrution in getJsonExp\n";
-//         assert(false);
-//         return result;
-//     }
-// }
-
 
 Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
     auto result = new Util::JsonObject();
@@ -116,14 +62,10 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
 
         return result;
     } else if (isa<CallInst>(inst)) {
-        // errs() << "no of operands in call inst : " << *inst->getOperand(1) << "\n";
         auto mce = dyn_cast<CallInst>(inst);
-        // auto minst = P4::MethodInstance::resolve(mce, refMap, typeMap);
         auto minst = mce->getCalledFunction()->getName();
         int argCount = mce->getFunctionType()->getFunctionNumParams();
         if (minst.contains("extract")) {
-            // auto extmeth = minst->to<P4::ExternMethod>();
-            // if (extmeth->method->name.name == corelib.packetIn.extract.name) {
             assert(argCount == 1 && 
                 "Two argument in extract function, need to convert to one argument. Do it when it hits");
             if (argCount == 1 || argCount == 2) {
@@ -133,10 +75,7 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
                 auto argtype = mce->getFunctionType()->getFunctionParamType(0);
                 // Ideally, the condtion checks whether arg is of header type,
                 // At this point it should be sure that argtype will be Type_header
-                // if (!argtype->isStructTy()) {
                 if (argtype->isPointerTy() && !argtype->getPointerElementType()->isStructTy()) {
-                    // ::error("%1%: extract only accepts arguments with header types, not %2%",
-                    //         arg, argtype);
                     errs() << "ERROR : extract only accepts arguments with header types, not : "
                             << argtype->getTypeID() << "\n";
                     exit(1); 
@@ -226,8 +165,6 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
             // Ideally, the condtion checks whether arg is of header type,
             // At this point it should be sure that argtype will be Type_header
             if (!argtype->isStructTy()) {
-                // ::error("%1%: extract only accepts arguments with header types, not %2%",
-                //         arg, argtype);
                 errs() << "extract only accepts arguments with header types, not : "
                        << argtype->getTypeID() << "\n";
                 exit(1);
@@ -290,17 +227,7 @@ Util::IJson* ParserConverter::convertParserStatement(Instruction* inst) {
 }
 
 bool ParserConverter::processParser(llvm::Function *F) {
-    // hanw hard-coded parser name assumed by BMv2
     auto parser_id = json->add_parser("parser");
-
-    // for (auto s : parser->parserLocals) {
-    //     if (auto inst = s->to<IR::P4ValueSet>()) {
-    //         auto bitwidth = inst->elementType->width_bits();
-    //         auto name = inst->controlPlaneName();
-    //         json->add_parse_vset(name, bitwidth);
-    //     }
-    // }
-
     // convert parse state
     for (auto state = F->begin(); state != F->end(); state++) {
         if (dyn_cast<Value>(state)->getName() == "reject" ||
@@ -340,13 +267,13 @@ bool ParserConverter::processParser(llvm::Function *F) {
                     json->add_parser_transition(state_id, trans);
                 }
                auto transition_key_arr = new Util::JsonArray();
-               errs() << "trans key: " <<getFieldName(switch_inst->getCondition(), transition_key_arr) << "\n";
+               // errs() << "trans key: " <<getFieldName(switch_inst->getCondition(), transition_key_arr) << "\n";
                auto transition_key = new Util::JsonObject();
                transition_key->emplace("type", "field");
                transition_key->emplace("value", transition_key_arr);
                json->add_parser_transition_key(state_id, (new Util::JsonArray())->append(transition_key));
             } else if(BranchInst* cond_branch = dyn_cast<BranchInst>(term)) {
-                errs() << "conditional branch \n" << *cond_branch << "\n";
+                // errs() << "conditional branch \n" << *cond_branch << "\n";
                 if(cond_branch->isConditional()) {
                     Value *cond = cond_branch->getCondition();
                     if(auto icmp = dyn_cast<ICmpInst>(cond)) {
@@ -390,39 +317,6 @@ bool ParserConverter::processParser(llvm::Function *F) {
                                 trans2->emplace("next_state", next_stage);
                             }
                             json->add_parser_transition(state_id, trans2);
-
-                            // if (dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "accept" ||
-                            //     dyn_cast<Value>(term->getSuccessor(0))->getName().str() == "reject") {
-                            //     auto trans1 = new Util::JsonObject();
-                            //     trans1->emplace("value", jmpVal_hex);
-                            //     trans1->emplace("mask", Util::JsonValue::null);
-                            //     auto next_state = dyn_cast<Value>(term->getSuccessor(1))->getName().str();
-                            //     trans1->emplace("next_state", Util::JsonValue::null);
-                            //     json->add_parser_transition(state_id, trans1);
-
-                            //     auto trans2 = new Util::JsonObject();
-                            //     trans2->emplace("value", "default");
-                            //     trans2->emplace("mask", Util::JsonValue::null);
-                            //     trans2->emplace("next_state", next_state);
-                            //     json->add_parser_transition(state_id, trans2);
-                            // } else if(dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "accept" ||
-                            //     dyn_cast<Value>(term->getSuccessor(1))->getName().str() == "reject") {
-                            //     auto trans1 = new Util::JsonObject();
-                            //     trans1->emplace("value", "default");
-                            //     trans1->emplace("mask", Util::JsonValue::null);
-                            //     trans1->emplace("next_state", Util::JsonValue::null);
-                            //     json->add_parser_transition(state_id, trans1);
-
-                            //     auto trans2 = new Util::JsonObject();
-                            //     trans2->emplace("value", jmpVal_hex);
-                            //     trans2->emplace("mask", Util::JsonValue::null);
-                            //     auto next_state = dyn_cast<Value>(term->getSuccessor(0))->getName().str();
-                            //     trans2->emplace("next_state", next_state);
-                            //     json->add_parser_transition(state_id, trans2);
-                            // } else {
-                            //     assert(false && "condtional branch is not expected when there is no default state(accept/reject)");
-                            //     return false;
-                            // }
                         }
                         else {
                             assert(false && "non equality in parser branch conditon, should not happen");
@@ -458,30 +352,8 @@ bool ParserConverter::processParser(llvm::Function *F) {
             trans->emplace("next_state", next_state);
             json->add_parser_transition(state_id, trans);
         }else {
-            // assert(false && "Never come here");
             return false;
         }
-
-        // if (state->selectExpression != nullptr) {
-        //     if (state->selectExpression->is<IR::SelectExpression>()) {
-        //         auto expr = state->selectExpression->to<IR::SelectExpression>();
-        //         auto transitions = convertSelectExpression(expr);
-        //         for (auto transition : transitions) {
-        //             json->add_parser_transition(state_id, transition);
-        //         }
-        //         auto key = convertSelectKey(expr);
-        //         json->add_parser_transition_key(state_id, key);
-        //     } else if (state->selectExpression->is<IR::PathExpression>()) {
-        //         auto expr = state->selectExpression->to<IR::PathExpression>();
-        //         auto transition = convertPathExpression(expr);
-        //         json->add_parser_transition(state_id, transition);
-        //     } else {
-        //         BUG("%1%: unexpected selectExpression", state->selectExpression);
-        //     }
-        // } else {
-        //     auto transition = createDefaultTransition();
-        //     json->add_parser_transition(state_id, transition);
-        // }
     }
     return false;
 }

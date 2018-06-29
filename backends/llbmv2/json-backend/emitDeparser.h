@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +29,7 @@ using namespace llvm;
 namespace LLBMV2 {
 
 class ConvertDeparser {
-    LLBMV2::JsonObjects*     json;
+    LLBMV2::JsonObjects* json;
  public:
     bool processDeparser(llvm::Function *F);
     explicit ConvertDeparser(LLBMV2::JsonObjects* json) :

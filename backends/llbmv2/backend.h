@@ -183,7 +183,7 @@ public:
             
             bbInsert = BasicBlock::Create(TheContext, "entry", function);
             
-            MYDEBUG(std::cout<< "SetInsertPoint = main\n";)
+            // MYDEBUG(std::cout<< "SetInsertPoint = main\n";)
             Builder.SetInsertPoint(bbInsert);
             Builder.CreateRetVoid();
     }
@@ -192,7 +192,7 @@ public:
     std::map<std::string, Value*> str;
 
     void dumpLLVMIR() {
-        std::cout << "******************************************************************************\n\n";
+        // std::cout << "******************************************************************************\n\n";
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
         assert(!TheModule->empty() && "module is empty");
@@ -220,7 +220,7 @@ public:
         for(auto e : enums) {
             SmallVector<Metadata*, 8> enumMDV;
             for(auto inner : e.second)  {
-                std::cout << "pushing -- " << inner <<"\n";
+                // std::cout << "pushing -- " << inner <<"\n";
                 enumMDV.push_back(MDString::get(TheContext, inner.c_str()));
             }
             MDNode* enumsMD = MDNode::get(TheContext, enumMDV);        
@@ -242,9 +242,9 @@ public:
     void runLLVMPasses(BMV2Options &options)
     {
         legacy::PassManager MPM;
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
+        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
         if(options.optimize) {
-            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Optimizing code" << std::endl;
+            // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Optimizing code" << std::endl;
 
             std::unique_ptr<legacy::FunctionPassManager> FPM;
             FPM.reset(new legacy::FunctionPassManager(TheModule.get()));
@@ -265,7 +265,7 @@ public:
         // MPM.add((*JsonBackend)());
         MPM.add(createJsonBackendPass(options.outputFile));
         MPM.run(*TheModule.get());
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Sucessfully ran pass" << std::endl;
+        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Sucessfully ran pass" << std::endl;
         // dlclose(handle);
         return;
     }

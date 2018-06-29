@@ -22,7 +22,7 @@ namespace LLBMV2 {
 bool ParserConverter::preorder(const IR::ParserState* parserState) {
     // set this block as insert point
     backend->Builder.SetInsertPoint(backend->defined_state[parserState->name.name]);
-    MYDEBUG(std::cout<< "SetInsertPoint = " << parserState->name.name;)
+    // MYDEBUG(std::cout<< "SetInsertPoint = " << parserState->name.name;)
     if (parserState->name == "accept") {
         backend->Builder.CreateRet(ConstantInt::get(Type::getInt32Ty(backend->TheContext), 1));
         return false;
@@ -77,7 +77,7 @@ bool ParserConverter::preorder(const IR::SelectExpression* t) {
 
     SwitchInst *sw = backend->Builder.CreateSwitch(toIR->processExpression(t->select->components[0],NULL,NULL), 
                                                         backend->defined_state["reject"], t->selectCases.size());
-    std::cout<<"coming here1******************\n";
+    // std::cout<<"coming here1******************\n";
                                                         
     //comment above line and uncomment below commented code to test selectexpression with dummy select key
     
@@ -104,7 +104,7 @@ bool ParserConverter::preorder(const IR::SelectExpression* t) {
                 backend->defined_state[t->selectCases[i]->state->path->asString()] = BasicBlock::Create(backend->TheContext, 
                                                      Twine(t->selectCases[i]->state->path->asString()), backend->function);
             }
-            std::cout<<"keyset = "<<*t->selectCases[i]->keyset<<"\ncoming here2******************\n";
+            // std::cout<<"keyset = "<<*t->selectCases[i]->keyset<<"\ncoming here2******************\n";
             ConstantInt *onVal = (ConstantInt *) toIR->processExpression(t->selectCases[i]->keyset);
             sw->addCase(onVal, backend->defined_state[t->selectCases[i]->state->path->asString()]);
         }
@@ -140,7 +140,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
 
     BasicBlock *init_block = BasicBlock::Create(backend->TheContext, "entry", parser_function);
     backend->Builder.SetInsertPoint(init_block);
-    MYDEBUG(std::cout<< "SetInsertPoint = Parser Entry\n";)
+    // MYDEBUG(std::cout<< "SetInsertPoint = Parser Entry\n";)
     for (auto s : parser->parserLocals) {
         if(auto dv = s->to<IR::Declaration_Variable>())
             dv->apply(*toIR);            
@@ -148,21 +148,21 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
     for (auto p : pl->parameters) {
         if(p->type->toString() == "packet_in")
             continue;
-        std::cout << "inserting " << p->name.name << " into st\n";
+        // std::cout << "inserting " << p->name.name << " into st\n";
         args->setName(std::string(p->name.name));
         // AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
         backend->st.insert("alloca_"+std::string(p->name.name),args);
         // backend->Builder.CreateStore(args, alloca);       
         args++;
     }
-    std::cout << "here3\n";
+    // std::cout << "here3\n";
     for (auto s : parser->states) {
         llvm::BasicBlock* bbInsert = llvm::BasicBlock::Create(backend->TheContext, std::string(s->name.name), parser_function);
         backend->defined_state[s->name.name] = bbInsert;
     }
     backend->Builder.CreateBr(backend->defined_state["start"]);
     for (auto s : parser->states) {
-        MYDEBUG(std::cout << "Visiting State = " <<  s << std::endl;);
+        // MYDEBUG(std::cout << "Visiting State = " <<  s << std::endl;);
         visit(s);
     }
     // TypeParameters
@@ -206,7 +206,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
     // }
     // Builder.SetInsertPoint(defined_state["accept"]); // on exit set entry of new inst in accept block
     // MYDEBUG(std::cout<< "SetInsertPoint = Parser -> Accept\n";)
-    std::cout << "parser done\n";
+    // std::cout << "parser done\n";
     // convert parse state
 
 
@@ -244,7 +244,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
         // }
     // }
     backend->st.exitScope();
-    std::cout<<"returning from preorder of parser\n";
+    // std::cout<<"returning from preorder of parser\n";
     return false;
 }
 
@@ -252,7 +252,7 @@ bool ParserConverter::preorder(const IR::P4Parser* parser) {
 bool ParserConverter::preorder(const IR::PackageBlock* block) {
     for (auto it : block->constantValue) {
         if (it.second->is<IR::ParserBlock>()) {
-            std::cout << "current packageblock -- " << it.second <<"\n";
+            // std::cout << "current packageblock -- " << it.second <<"\n";
             visit(it.second->getNode());
         }
     }

@@ -236,7 +236,7 @@ bool ConvertHeaders::preorder(const IR::Type_StructLike* t) {
         backend->huMDV.push_back(MDString::get(backend->TheContext, "struct."+t->name));
 
     backend->defined_type[t->name] = structReg;
-    std::cout << "t->name" << t->name << "\n";
+    // std::cout << "t->name" << t->name << "\n";
 
     int i=0;
     for(auto x: t->fields) {

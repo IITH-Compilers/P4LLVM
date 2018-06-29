@@ -1,3 +1,21 @@
+/*
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
@@ -48,7 +66,7 @@ public:
 
 	virtual bool runOnModule(Module &M) {
 		// initialize json objects
-		M.dump();
+		// M.dump();
 		populateJsonObjects(M);
 		populateStruct2Type(M.getIdentifiedStructTypes(),
 							M.getNamedMetadata("header"),
@@ -57,11 +75,6 @@ public:
 		LLVMJsonBackend::emitErrors(json);
 		LLVMJsonBackend::emitFieldAliases(json);
 		emitLocalVariables(M);
-		// Iterate on functions
-		// for (auto fun = M.begin(); fun != M.end(); fun++) {
-		// 	errs() << "Name of the function is: " << (&*fun)->getName() << "\n";
-		// 	emitHeaders(&*fun);
-		// }
 		emitHeaders(M);
 		emitParser(M);
 		emitDeparser(M);
@@ -190,7 +203,6 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			MDString *mdstr = dyn_cast<MDString>(header_md->getOperand(0)->getOperand(op));
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString())) {
-				//errs() << st->getName() << " is of Header type\n";
 				(*struct2Type)[st] = "header";
 				found = true;
 				break;
@@ -204,7 +216,6 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString()))
 			{
-				//errs() << st->getName() << " is of struct type\n";
 				(*struct2Type)[st] = "struct";
 				found = true;
 				break;
@@ -218,7 +229,6 @@ void JsonBackend::populateStruct2Type(std::vector<StructType *> structs,
 			assert(mdstr != nullptr);
 			if (st->getName().equals(mdstr->getString()))
 			{
-				//errs() << st->getName() << " is of header_union type\n";
 				(*struct2Type)[st] = "header_union";
 				found = true;
 				break;
@@ -232,9 +242,8 @@ void JsonBackend::printJsonToFile(const std::string filename)
 	std::filebuf fb;
 	fb.open(filename, std::ios::out);
 	std::ostream os(&fb);
-	// std::ostream *out = openFile(filename, false);
 	jsonTop.serialize(os);
-	errs() << "printed json to : " << filename << "\n";
+	errs() << "Output json : " << filename << "\n";
 }
 
 void JsonBackend::populateJsonObjects(Module &M)
@@ -272,17 +281,11 @@ bool JsonBackend::emitHeaders(Module &M) {
 	for(auto fn = M.begin(); fn != M.end(); fn++) {
 		Function *F = &*fn;
 		if(F->getAttributes().getFnAttributes().hasAttribute("parser")) {
-			//errs() << "Found parser function\n";
 			for(auto param = F->arg_begin(); param != F->arg_end(); param++) {
 				auto st = dyn_cast<StructType>(dyn_cast<PointerType>((&*param)->getType())->getElementType());
 				if (st != nullptr && (*struct2Type)[st] == "struct")
 				{
-					//errs() << "Calling parser function\n";
 					ch.processParams(st, struct2Type, json);
-				}
-				else {
-					errs() << "not calling processParams\n";
-					errs() << (*struct2Type)[st] << "\n";
 				}
 			}
 			// Padding is calulated for scalars, add it to json now.

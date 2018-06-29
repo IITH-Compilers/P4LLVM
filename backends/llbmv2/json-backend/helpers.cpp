@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: D Tharun, S Venkata
+email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,30 +20,6 @@ limitations under the License.
 
 using namespace llvm;
 namespace LLVMJsonBackend {
-
-/// constant definition for LLBMV2
-// const cstring TableImplementation::actionProfileName = "action_profile";
-// const cstring TableImplementation::actionSelectorName = "action_selector";
-// const cstring TableImplementation::directCounterName = "direct_counter";
-// const cstring TableImplementation::counterName = "counter";
-// const cstring TableImplementation::directMeterName = "direct_meter";
-// const cstring MatchImplementation::selectorMatchTypeName = "selector";
-// const cstring MatchImplementation::rangeMatchTypeName = "range";
-// const cstring TableAttributes::implementationName = "implementation";
-// const cstring TableAttributes::sizeName = "size";
-// const cstring TableAttributes::supportTimeoutName = "supportTimeout";
-// const cstring TableAttributes::countersName = "counters";
-// const cstring TableAttributes::metersName = "meters";
-// const unsigned TableAttributes::defaultTableSize = 1024;
-// const cstring V1ModelProperties::jsonMetadataParameterName = "standard_metadata";
-// const cstring V1ModelProperties::validField = "$valid$";
-
-// Util::IJson* nodeName(const CFG::Node* node) {
-//     if (node->name.isNullOrEmpty())
-//         return Util::JsonValue::null;
-//     else
-//         return new Util::JsonValue(node->name);
-// }
 
 Util::JsonArray* mkArrayField(Util::JsonObject* parent, cstring name) {
     auto result = new Util::JsonArray();
@@ -160,7 +138,6 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
     auto gep = dyn_cast<GetElementPtrInst>(arg);
     if (gep)
     {
-        //errs() << "No of operands in gep : " << gep->getNumOperands() << "\n";
         if (isIndex1D(gep))
         {
             auto src_type = dyn_cast<StructType>(gep->getSourceElementType());
@@ -188,13 +165,11 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
 
     if (auto ld = dyn_cast<LoadInst>(arg))
     {
-        //errs() << "No of operands in load : " << ld->getNumOperands() << "\n";
         return getFieldName(ld->getOperand(0), fieldArr);
     }
 
     if (auto bc = dyn_cast<BitCastInst>(arg))
     {
-        //errs() << "No of operands in bitcast : " << bc->getNumOperands() << "\n";
         assert(bc->getType()->isPointerTy() && "not a pointer type in getFieldName");
         // This type is for checking if there is cast from header to integer type, this may happen
         // if we are accessing first element of the structure.
@@ -223,7 +198,6 @@ cstring getFieldName(Value *arg, Util::JsonArray *fieldArr)
         // if(!gep)
         //     assert(false && "insetvalue inst has no gep instruction");
         return ("."+StringRef(getFieldName(iv->getOperand(1), fieldArr).substr(1)).split(".struct").first).str().c_str();
-        // return "";
     }
     // assert(false && "Unknow type instruction type in getFieldName");
     return "";
@@ -316,10 +290,6 @@ void setActionID(cstring action, unsigned id)
 }
 
 void insertInMetaMap(){
-    // if(metaMap.find(name) == metaMap.end())
-    //     metaMap[name] = meta_name;
-    // else
-    //     assert(false && "Name alredy exists in metaMap");
     metaMap["struct.standard_metadata_t.field_0"] = "ingress_port";
     metaMap["struct.standard_metadata_t.field_1"] = "egress_spec";
     metaMap["struct.standard_metadata_t.field_2"] = "egress_port";
@@ -347,7 +317,6 @@ cstring getFromMetaMap(cstring name)
         return metaMap[name];
     else
         return name;
-        // assert(false && "Name doesn't exit in metaMap");
 }
 
 bool isSMeta(cstring name) {

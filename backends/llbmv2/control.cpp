@@ -38,7 +38,7 @@ bool ControlConverter::preorder(const IR::P4Action* t){
                 args.push_back(backend->getType(param->type));
             names.push_back("alloca_"+std::string(param->name.name));
             allnames.insert(std::string(param->name.name));
-            MYDEBUG(std::cout << param->name.name << "\n";)
+            // MYDEBUG(std::cout << param->name.name << "\n";)
         }
         
 
@@ -66,7 +66,7 @@ bool ControlConverter::preorder(const IR::P4Action* t){
         backend->Builder.SetInsertPoint(backend->bbInsert);
 
         auto names_iter = names.begin();
-        std::cout << __LINE__ << "\n\n";
+        // std::cout << __LINE__ << "\n\n";
         for (auto arg = backend->function->arg_begin(); arg != backend->function->arg_end(); arg++)
         {
             //name the argument

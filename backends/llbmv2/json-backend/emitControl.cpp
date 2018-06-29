@@ -33,9 +33,6 @@ Util::JsonObject* ControlConverter::convertTable(CallInst *apply_call,
     std::string table_match_type = "exact";
     auto tkey = mkArrayField(table, "key");
     std::vector<std::string> keys;
-    // std::map<std::string, std::string> keyMatches;
-    //errs() << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
-    //errs() << "Function Name : " << apply_call->getCalledFunction()->getName() << "\n";
     unsigned actionsPtrStartIdx;
     for(auto arg = 0; arg < apply_call->getNumOperands()-1; arg = arg+2) {
         if (apply_call->getOperand(arg)->getType()->isPointerTy() &&
@@ -47,12 +44,10 @@ Util::JsonObject* ControlConverter::convertTable(CallInst *apply_call,
         if(dyn_cast<GlobalVariable>(apply_call->getOperand(arg))->isConstant()) {
             auto cont = dyn_cast<GlobalVariable>(apply_call->getOperand(arg));
             auto cont1 = dyn_cast<ConstantDataArray>(cont->getInitializer());
-            //errs() << cont1->getAsString() << "\n";
             match = cont1->getAsString().str().c_str();
         }
         auto key_arr = new Util::JsonArray();
         auto key = getFieldName(apply_call->getOperand(arg+1), key_arr);
-        // keyMatches[key] = match;
 
         if (match != table_match_type) {
             if (match == "range")
@@ -86,7 +81,6 @@ Util::JsonObject* ControlConverter::convertTable(CallInst *apply_call,
     }
     table->emplace("match_type", table_match_type);
     std::string table_type;
-    //errs() << "table type inst is : \n"<< *apply_call->getOperand(actionsPtrStartIdx) << "\n";
     if (auto table_type_call = dyn_cast<CallInst>(apply_call->getOperand(actionsPtrStartIdx++)))
         if(table_type_call->getCalledFunction()->getName() == "simplImpl")
             table_type = "simple";
@@ -102,7 +96,6 @@ Util::JsonObject* ControlConverter::convertTable(CallInst *apply_call,
     table->emplace("type", table_type);
 
     unsigned table_size;
-    //errs() << *apply_call->getOperand(actionsPtrStartIdx) << "\n";
     if (auto size = dyn_cast<ConstantInt>(apply_call->getOperand(actionsPtrStartIdx++))) {
         table_size = size->getZExtValue();
     } else {
@@ -367,13 +360,9 @@ void ChecksumConverter::processChecksum(Function *F) {
         if(isa<CallInst>(&*inst) && inst->getType()->isVoidTy()) {
             auto call_inst = dyn_cast<CallInst>(&*inst);
             auto calledFun = call_inst->getCalledFunction();
-            //errs() << "!!!!!!!!!!!!!no of operands : " << (&*inst)->getNumOperands() << "\n";
-            //errs() << "!!!!!!!!!!!!!no of operands : " << *(&*inst) << "\n";
             assert(I->getNumOperands() > 2 && "Not enough opernads in verify/update checksum");
             bool usePayload = I->getName().contains("_with_payload");
             auto cksum = new Util::JsonObject();
-            // auto arg = I->arg_begin() + 1;
-            // auto arg_end = I->arg_end() - 1;
             std::vector<Value*> data;
             for(auto op = 1; op < I->getNumOperands()-2; op++) {
                 data.push_back(I->getOperand(op));
@@ -390,8 +379,6 @@ void ChecksumConverter::processChecksum(Function *F) {
             auto bool_arg = I->getOperand(0);
             auto ifcond = new Util::JsonObject();
             if(auto bool_call = dyn_cast<CallInst>(bool_arg)) {
-            //errs() << "###########--- bool_arg : " << *I->getOperand(0) << "\n"
-                    // << "name is : " <<  bool_call->getCalledFunction()->getName() << "\n"; 
                 if (bool_call->getCalledFunction()->getName() == "isValid" ||
                     bool_call->getCalledFunction()->getName() == "isInvalid") {
                         ifcond->emplace("type", "expression");

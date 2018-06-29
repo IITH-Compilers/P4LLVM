@@ -25,35 +25,24 @@ public:
 	}
 
 	virtual bool runOnFunction(Function &F) {
-		errs() << F.getName() << " function hit in rse\n";
 		std::vector<StoreInst*> sInst;
 		for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
 			if(auto store = dyn_cast<StoreInst>(&*I))	{
-				store->dump();
 				auto val = store->getValueOperand();
 				auto ptr = store->getPointerOperand();
 				bool flag = false;
-				ptr->dump();
-				errs() << "users of ptr -- \n";
-				for(auto user_iter = ptr->user_begin(), E = ptr->user_end(); user_iter != E; ++user_iter){
-					user_iter->dump();			
+				for(auto user_iter = ptr->user_begin(), E = ptr->user_end(); user_iter != E; ++user_iter){	
 					if(dyn_cast<StoreInst>(*user_iter) == store) {
-						errs() << "things do work\n";
 						flag = true;
 						continue;
 					}
 					if(flag) {
-						errs() << "inside true flag\n";
 						flag = false;
 						if(auto st = dyn_cast<StoreInst>(*user_iter)) {
-							errs() << "instruction to remove -- ";
-							st->dump();
-							errs() << "\n";
 							sInst.push_back(st);
 						}
 					}
 				}
-			 errs()<<"----------------------------\n";
 			}
 		}
 		for(auto st : sInst) {
