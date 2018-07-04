@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,7 +33,6 @@ limitations under the License.
 #include "backend.h"
 #include "midend.h"
 #include "options.h"
-#include "JsonObjects.h"
 
 // static void log_dump1(const IR::Node *node, const char *head) {
 //     if (node) {
@@ -102,12 +103,10 @@ int main(int argc, char *const argv[]) {
     try {
         backend.addDebugHook(hook);
         backend.process(toplevel, options);
-        // std::cout << "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n";
-        backend.convert(options);
+        backend.convert();
         backend.addMetaData();
         backend.dumpLLVMIR();
         backend.runLLVMPasses(options);
-        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~After Backend pass in bmv2.cpp\n";
         // log_dump1(toplevel,"From backend of bmv2");
     } catch (const Util::P4CExceptionBase &bug) {
         std::cerr << bug.what() << std::endl;
@@ -115,14 +114,6 @@ int main(int argc, char *const argv[]) {
     }
     if (::errorCount() > 0)
         return 1;
-
-    // if (!options.outputFile.isNullOrEmpty()) {
-    //     std::ostream* out = openFile(options.outputFile, false);
-    //     if (out != nullptr) {
-    //         backend.serialize(*out);
-    //         out->flush();
-    //     }
-    // }
 
     P4::serializeP4RuntimeIfRequired(program, options);
 

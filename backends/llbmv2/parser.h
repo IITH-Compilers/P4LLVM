@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,12 +24,9 @@ limitations under the License.
 #include "frontends/p4/typeMap.h"
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "backend.h"
-#include "expression.h"
 #include "toIR.h"
 
 namespace LLBMV2 {
-
-class JsonObjects;
 
 class ParserConverter : public Inspector {
     Backend* backend;

@@ -1,6 +1,6 @@
 /*
 IITH Compilers
-authors: D Tharun, S Venkata
+authors: D Tharun, S Venkata Keerthy
 email: {cs15mtech11002, cs17mtech11018}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");

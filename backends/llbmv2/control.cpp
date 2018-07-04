@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,7 +40,6 @@ bool ControlConverter::preorder(const IR::P4Action* t){
                 args.push_back(backend->getType(param->type));
             names.push_back("alloca_"+std::string(param->name.name));
             allnames.insert(std::string(param->name.name));
-            // MYDEBUG(std::cout << param->name.name << "\n";)
         }
         
 
@@ -51,7 +52,6 @@ bool ControlConverter::preorder(const IR::P4Action* t){
                 action_call_args[t->name.name].push_back(vp.second);
                 names.push_back(std::string(vp.first));
                 allnames.insert(std::string(vp.first));
-                // MYDEBUG(vp.second->dump();)
             }
         }
         backend->st.enterScope();
@@ -66,7 +66,6 @@ bool ControlConverter::preorder(const IR::P4Action* t){
         backend->Builder.SetInsertPoint(backend->bbInsert);
 
         auto names_iter = names.begin();
-        // std::cout << __LINE__ << "\n\n";
         for (auto arg = backend->function->arg_begin(); arg != backend->function->arg_end(); arg++)
         {
             //name the argument
@@ -78,7 +77,6 @@ bool ControlConverter::preorder(const IR::P4Action* t){
             }
             else
                 backend->st.insert(std::string(*names_iter),arg);            
-        // arg->dump();
             names_iter++;
         }
 

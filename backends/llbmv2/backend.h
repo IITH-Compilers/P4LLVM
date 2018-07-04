@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,8 +19,6 @@ limitations under the License.
 #ifndef _BACKENDS_BMV2_BACKEND_H_
 #define _BACKENDS_BMV2_BACKEND_H_
 
-#include "analyzer.h"
-#include "expression.h"
 #include "frontends/common/model.h"
 #include "frontends/p4/coreLibrary.h"
 #include "helpers.h"
@@ -29,7 +29,6 @@ limitations under the License.
 #include "lib/json.h"
 #include "lib/log.h"
 #include "lib/nullstream.h"
-#include "JsonObjects.h"
 #include "metermap.h"
 #include "midend/convertEnums.h"
 #include "options.h"
@@ -45,8 +44,6 @@ limitations under the License.
 
 namespace LLBMV2 {
 
-class ExpressionConverter;
-
 class Backend : public PassManager {
     using DirectCounterMap = std::map<cstring, const IR::P4Table*>;
 
@@ -57,10 +54,8 @@ class Backend : public PassManager {
     P4::TypeMap*                     typeMap;
     P4::ConvertEnums::EnumMapping*   enumMap;
     const IR::ToplevelBlock*         toplevel;
-    ExpressionConverter*             conv;
     P4::P4CoreLibrary&               corelib;
     ProgramParts                     structure;
-    Util::JsonObject                 jsonTop;
     P4::PortableModel&               model;  // remove
     DirectCounterMap                 directCounterMap;
     DirectMeterMap                   meterMap;
@@ -73,17 +68,7 @@ class Backend : public PassManager {
     // PortableSwitchJsonConverter*  portableSwitch;
 
  public:
-    LLBMV2::JsonObjects*               json;
     Target                           target;
-    Util::JsonArray*                 counters;
-    Util::JsonArray*                 externs;
-    Util::JsonArray*                 field_lists;
-    Util::JsonArray*                 learn_lists;
-    Util::JsonArray*                 meter_arrays;
-    Util::JsonArray*                 register_arrays;
-    Util::JsonArray*                 force_arith;
-    Util::JsonArray*                 field_aliases;
-
     // We place scalar user metadata fields (i.e., bit<>, bool)
     // in the scalarsName metadata object, so we may need to rename
     // these fields.  This map holds the new names.
@@ -102,17 +87,13 @@ class Backend : public PassManager {
  protected:
     ErrorValue retrieveErrorValue(const IR::Member* mem) const;
     void createFieldAliases(const char *remapFile);
-    void genExternMethod(Util::JsonArray* result, P4::ExternMethod *em);
 
  public:
     void process(const IR::ToplevelBlock* block, BMV2Options& options);
-    void convert(BMV2Options& options);
-    void serialize(std::ostream& out) const
-    { jsonTop.serialize(out); }
+    void convert();
     P4::P4CoreLibrary &   getCoreLibrary() const   { return corelib; }
     ErrorCodesMap &       getErrorCodesMap()       { return errorCodesMap; }
     // P4::ConvertEnums::EnumMapping* getEnumMap() {return enumMap;}
-    ExpressionConverter * getExpressionConverter() { return conv; }
     DirectCounterMap &    getDirectCounterMap()    { return directCounterMap; }
     DirectMeterMap &      getMeterMap()  { return meterMap; }
     P4::PortableModel &   getModel()     { return model; }
@@ -121,10 +102,8 @@ class Backend : public PassManager {
     P4::TypeMap*          getTypeMap()   { return typeMap; }
     P4V1::SimpleSwitch*   getSimpleSwitch()        { return simpleSwitch; }
     const IR::ToplevelBlock* getToplevelBlock() { CHECK_NULL(toplevel); return toplevel; }
-    /// True if this parameter represents the standard_metadata input.
-    bool isStandardMetadataParameter(const IR::Parameter* param);
 
-    //Code for emitting LLVM-IR
+//Code for emitting LLVM-IR
 public:
     llvm::IRBuilder<> Builder;
     BasicBlock *bbInsert;
@@ -136,8 +115,6 @@ public:
     cstring fileName;
     std::map<cstring, std::vector<cstring> > enums;
     
-    // ToIR* toIR;
-
     std::map<llvm::Type *, std::map<std::string, int> > structIndexMap;
     std::map<cstring, llvm::Type *> defined_type;
     std::map<cstring, llvm::BasicBlock *> defined_state;
@@ -148,29 +125,12 @@ public:
     
     SmallVector<Metadata*, 4> headerMDV, structMDV, huMDV, errorsMDV;
     
-    int i =0; //Debug info
-
-    unsigned getByteAlignment(unsigned width) {
-        if (width <= 8)
-            return 8;
-        else if (width <= 16)
-            return 16;
-        else if (width <= 32)
-            return 32;
-        else if (width <= 64)
-            return 64;
-        else
-            // compiled as u8* 
-            return 64;
-    }
-public:
     Backend(bool isV1, P4::ReferenceMap* refMap, P4::TypeMap* typeMap,
             P4::ConvertEnums::EnumMapping* enumMap, cstring fileName) :
         refMap(refMap), typeMap(typeMap), enumMap(enumMap),
         corelib(P4::P4CoreLibrary::instance),
         model(P4::PortableModel::instance),
         simpleSwitch(new P4V1::SimpleSwitch(this)),
-        json(new LLBMV2::JsonObjects()),
         target(Target::SIMPLE),
         Builder(TheContext), 
         fileName(fileName) {
@@ -183,7 +143,6 @@ public:
             
             bbInsert = BasicBlock::Create(TheContext, "entry", function);
             
-            // MYDEBUG(std::cout<< "SetInsertPoint = main\n";)
             Builder.SetInsertPoint(bbInsert);
             Builder.CreateRetVoid();
     }
@@ -192,7 +151,6 @@ public:
     std::map<std::string, Value*> str;
 
     void dumpLLVMIR() {
-        // std::cout << "******************************************************************************\n\n";
         std::error_code ec;         
         S = new raw_fd_ostream(fileName+".ll", ec, sys::fs::F_RW);
         assert(!TheModule->empty() && "module is empty");
@@ -220,7 +178,6 @@ public:
         for(auto e : enums) {
             SmallVector<Metadata*, 8> enumMDV;
             for(auto inner : e.second)  {
-                // std::cout << "pushing -- " << inner <<"\n";
                 enumMDV.push_back(MDString::get(TheContext, inner.c_str()));
             }
             MDNode* enumsMD = MDNode::get(TheContext, enumMDV);        
@@ -242,10 +199,7 @@ public:
     void runLLVMPasses(BMV2Options &options)
     {
         legacy::PassManager MPM;
-        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Before to passmanager" << std::endl;
         if(options.optimize) {
-            // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Optimizing code" << std::endl;
-
             std::unique_ptr<legacy::FunctionPassManager> FPM;
             FPM.reset(new legacy::FunctionPassManager(TheModule.get()));
             PassManagerBuilder PMBuilder;
@@ -255,18 +209,13 @@ public:
             PMBuilder.populateModulePassManager(MPM);
             MPM.add(createAggressiveDCEPass());
             FPM->add(createStoreEliminationPass());
-            // FPM.add();
             FPM->doInitialization();
             for (Function &F : *TheModule)
                 FPM->run(F);
             FPM->doFinalization();
         }
-        // TheModule->dump();
-        // MPM.add((*JsonBackend)());
         MPM.add(createJsonBackendPass(options.outputFile));
         MPM.run(*TheModule.get());
-        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Sucessfully ran pass" << std::endl;
-        // dlclose(handle);
         return;
     }
 };

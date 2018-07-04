@@ -36,24 +36,11 @@ class SimpleSwitch {
 
 
  protected:
-    void addToFieldList(const IR::Expression* expr, Util::JsonArray* fl);
-    int createFieldList(const IR::Expression* expr, cstring group,
-                        cstring listName, Util::JsonArray* field_lists);
     cstring convertHashAlgorithm(cstring algorithm);
-    cstring createCalculation(cstring algo, const IR::Expression* fields,
-                              Util::JsonArray* calculations, bool usePayload, const IR::Node* node);
-
+    
  public:
     void modelError(const char* format, const IR::Node* place) const;
-    void convertExternObjects(Util::JsonArray *result, const P4::ExternMethod *em,
-                              const IR::MethodCallExpression *mc, const IR::StatOrDecl *s);
-    void convertExternFunctions(Util::JsonArray *result, const P4::ExternFunction *ef,
-                                const IR::MethodCallExpression *mc, const IR::StatOrDecl* s);
-    void convertExternInstances(const IR::Declaration *c,
-                                const IR::ExternBlock* eb, Util::JsonArray* action_profiles,
-                                LLBMV2::SharedActionSelectorCheck& selector_check);
-    void convertChecksum(const IR::BlockStatement* body, Util::JsonArray* checksums,
-                         Util::JsonArray* calculations, bool verify);
+    void convertChecksum(const IR::BlockStatement* body, bool verify);
 
     void setPipelineControls(const IR::ToplevelBlock* blk, std::set<cstring>* controls,
                              std::map<cstring, cstring>* map);

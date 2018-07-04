@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -56,7 +58,6 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
         if(p->type->toString() == "packet_out")
             continue;
         control_function_args.push_back(PointerType::get(backend->getCorrespondingType(p->type),0)); // push type of parameter
-//        backend->getCorrespondingType(p->type)->dump();
     }
     
     FunctionType *control_function_type = FunctionType::get(Type::getInt32Ty(backend->TheContext), control_function_args, false);
@@ -73,9 +74,7 @@ void ConvertDeparser::convertDeparser(const IR::P4Control* cont) {
         if(p->type->toString() == "packet_out")
             continue;
         args->setName(std::string(p->name.name));
-        // AllocaInst *alloca = backend->Builder.CreateAlloca(args->getType());
         backend->st.insert("alloca_"+std::string(p->name.name),args);
-        // backend->Builder.CreateStore(args, alloca);        
         args++;
     }
     convertDeparserBody(&cont->body->components);

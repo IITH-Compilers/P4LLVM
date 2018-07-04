@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,11 +22,10 @@ limitations under the License.
 
 namespace LLBMV2 {
 
-ConvertHeaders::ConvertHeaders(Backend* backend, cstring scalarsName)
-        : backend(backend), scalarsName(scalarsName), refMap(backend->getRefMap()),
+ConvertHeaders::ConvertHeaders(Backend* backend)
+        : backend(backend), refMap(backend->getRefMap()),
           typeMap(backend->getTypeMap()) {
     setName("ConvertHeaders");
-    CHECK_NULL(backend->json);
 }
 
 /**
@@ -217,7 +218,6 @@ bool ConvertHeaders::preorder(const IR::PackageBlock *block) {
 }
 
 bool ConvertHeaders::preorder(const IR::Type_StructLike* t) {
-    LOG1("\nType_StructLike\t "<<*t << "\ti = "<<backend->i++<<"\n-------------------------------------------------------------------------------------------------------------\n");
     auto z = backend->defined_type[t->name];
     if(z)
         return backend->defined_type[t->name];
@@ -236,14 +236,12 @@ bool ConvertHeaders::preorder(const IR::Type_StructLike* t) {
         backend->huMDV.push_back(MDString::get(backend->TheContext, "struct."+t->name));
 
     backend->defined_type[t->name] = structReg;
-    // std::cout << "t->name" << t->name << "\n";
 
     int i=0;
     for(auto x: t->fields) {
         backend->structIndexMap[structReg][std::string(x->name.name)] = i;
         i++;
     }
-    // backend->st.insert("alloca_"+t->getName(),backend->Builder.CreateAlloca(structReg));
     return false;
 }
 

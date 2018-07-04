@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -56,7 +58,7 @@ class ConvertHeaders : public Inspector {
     bool preorder(const IR::PackageBlock* b) override;
     bool preorder(const IR::Parameter* param) override;
 
-    ConvertHeaders(Backend* backend, cstring scalarsName);
+    ConvertHeaders(Backend* backend);
 };
 
 }  // namespace LLBMV2

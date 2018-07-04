@@ -1,6 +1,6 @@
 /*
 IITH Compilers
-authors: S Venkata, D Tharun
+authors: S Venkata Keerthy, D Tharun
 email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,9 +26,7 @@ Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, c
 
     for(int i=0; i<no; i++){
         if(auto inst = mce->arguments->at(i)->to<IR::ListExpression>())   {
-            // std::cout << "caught list exp\n";
             for(auto c : inst->components) {
-                // std::cout << "processing - " << c<<"\n";
                 if(params.at(i)->hasOut())
                     llvmValue = processExpression(c,nullptr,nullptr,true);
                 else
@@ -50,11 +48,7 @@ Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, c
             llvmValue = nullptr;
         } 
     }
-    //for(auto x:args)
-        //x->dump();
-    //std::cout << "--\n";
-    //for(auto y:param)
-        //y->getType()->dump();
+
     FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), args, false);
     Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
     return backend->Builder.CreateCall(decl, param);
@@ -63,9 +57,7 @@ Value* ToIR::createExternFunction(int no, const IR::MethodCallExpression* mce, c
 Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullptr*/, BasicBlock* bbElse/*=nullptr*/, bool required_alloca /*=false*/) {
 
     assert(e != nullptr);
-    // std::cout <<"processing -- " << *e << "\n";
     if(e->is<IR::Operation_Unary>())    {
-        // std::cout << "caught as operation_unary\n"<<*e<<"\n";
         const IR::Operation_Unary* oue = e->to<IR::Operation_Unary>();
         Value* exp = processExpression(oue->expr, bbIf, bbElse);
         if(e->is<IR::Cmpl>()) 
@@ -78,7 +70,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
             return backend->Builder.CreateICmpEQ(exp, ConstantInt::get(exp->getType(),0));
 
         if(auto c = e->to<IR::Cast>())  {
-            // std::cout << "in cast\n"<<"oue->expr -- " <<*oue->expr<<"\ncast type--"<<*c<<"\n";
             int srcWidth = oue->expr->type->width_bits();
             int destWidth = c->destType->width_bits();
             if(srcWidth < destWidth)   {
@@ -95,85 +86,61 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
         }
 
         if (e->is<IR::Member>()) {
-            // std::cout << "inside member handling of processexpression\n";
             const IR::Member* expression = e->to<IR::Member>();        
             auto type = backend->getTypeMap()->getType(expression, true);
             if (type->is<IR::Type_Error>() && expression->expr->is<IR::TypeNameExpression>()) {
                 // this deals with constants that have type 'error'
-                // MYDEBUG(std::cout<<"TYPE_ERROR\n";)            
                 auto decl = type->to<IR::Type_Error>()->getDeclByName(expression->member.name);
                 ErrorCodesMap errCodes = backend->getErrorCodesMap();
                 auto errorValue = errCodes.at(decl);
                 return ConstantInt::get(backend->Builder.getInt32Ty(),errorValue);        
             }
             if (type->is<IR::Type_Enum>() && expression->expr->is<IR::TypeNameExpression>()) {
-                // std::cout << "TYPE_ENUM\n";
                 auto decl = type->to<IR::Type_Enum>()->getDeclByName(expression->member.name)->getName();
-                // std::cout << decl <<"\n" << type->to<IR::Type_Enum>()->name; 
                 auto it = backend->enums.find(type->to<IR::Type_Enum>()->name);  
                 if(it != backend->enums.end()) {
                     auto itr = std::find(it->second.begin(), it->second.end(), decl);
-                    // if(itr != it.second.end())
                     auto enumValue = std::distance(it->second.begin(), itr)+1;
-                    // auto enumValue = it->second.at(decl);
                     return ConstantInt::get(backend->Builder.getInt32Ty(),enumValue);                     
                 }
                 else {
                     std::vector<cstring> enumContainer; 
                     for (auto e : *(type->to<IR::Type_Enum>())->getDeclarations()) {
                         enumContainer.push_back(e->getName().name);
-                        // std::cout << "\n-------\n" << e->getName().name << "\n-------\n";
                     }   
                     auto itr = std::find(enumContainer.begin(), enumContainer.end(), decl);                    
-                    // auto enumValue = enumContainer.at(decl);                    
                     auto enumValue = std::distance(enumContainer.begin(), itr)+1;                    
                     backend->enums.insert(make_pair(type->to<IR::Type_Enum>()->name,enumContainer));
                     return ConstantInt::get(backend->Builder.getInt32Ty(),enumValue);                                         
                 }
             }
             Value *ex = processExpression(e->to<IR::Member>()->expr, nullptr, nullptr, true);
-            // ex->dump();
-            // MYDEBUG(std::cout << e->to<IR::Member>()->member.name << std::endl;)
             int ext_i = backend->structIndexMap[((PointerType *)ex->getType())->getElementType()][std::string(e->to<IR::Member>()->member.name)];
-            // MYDEBUG(std::cout << "processed expression inside member, retrieved from backend->structIndexMap as - " << ext_i << std::endl;)
             std::vector<Value *> idx;
             idx.push_back(ConstantInt::get(backend->TheContext, llvm::APInt(32, 0, false)));
             idx.push_back(ConstantInt::get(backend->TheContext, llvm::APInt(32, ext_i, false)));
             ex = backend->Builder.CreateGEP(ex, idx);
-            // MYDEBUG(std::cout << "created GEP\n";)
-            // std::cout << "*****************************************************************************\n";
             if(ex->getType()->getPointerElementType()->isVectorTy()) {
-                // std::cout << "inside arrayty\n";
-                //ex->dump();
-                //ex->getType()->getPointerElementType()->dump();
                 auto width = dyn_cast<SequentialType>(ex->getType()->getPointerElementType())->getNumElements();
-                // std::cout << "width =-- "<<width<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!111111111\n";
                 auto x = Type::getIntNPtrTy(backend->TheContext, width);
                 auto tmp = backend->Builder.CreateBitCast(ex, x);
-                //tmp->dump();
                 ex = tmp;
             }
-            //MYDEBUG(ex->dump();)
             if (required_alloca) 
                 return ex;
             else {
-                //backend->Builder.CreateLoad(ex)->dump();
-		return backend->Builder.CreateLoad(ex);
+        		return backend->Builder.CreateLoad(ex);
             }
         }
         else
             BUG("unhandled op_unary");
     }
     if(e->is<IR::BoolLiteral>())    {
-        // std::cout << "caught as boolliteral\n";
-        
         const IR::BoolLiteral* c = e->to<IR::BoolLiteral>();            
         return ConstantInt::get(backend->getType(typemap->getType(c)),c->value);            
     }
 
     if(e->is<IR::Constant>()) {  
-        // std::cout << "caught as constant -- "<<*e<<"\n";
-        
         const IR::Constant* c = e->to<IR::Constant>();
         auto ty = typemap->getType(c);
         if(!ty)
@@ -185,22 +152,17 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
     if(e->is<IR::PathExpression>()) {
         cstring name = refmap->getDeclaration(e->to<IR::PathExpression>()->path)->getName();    
         Value* v = backend->st.lookupGlobal("alloca_"+name);
-        // std::cout << "looking for -- alloca_"<< name << " in pathexpression of processexpression()\n";
         assert(v != nullptr);
         if(required_alloca)
             return v;
         else   {
-            // std::cout << "creating load..\n";
             auto a = backend->Builder.CreateLoad(v);
-            // a->dump();
             return a;
         }
     }
 
 
     if(e->is<IR::Operation_Binary>())   {
-        // std::cout << "caught as operation_binary\n";
-        
         const IR::Operation_Binary* obe = e->to<IR::Operation_Binary>();
         Value* left; Value* right;
         left = processExpression(obe->left, bbIf, bbElse);
@@ -234,7 +196,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 right = backend->Builder.CreateZExtOrBitCast (right,backend->getType(obe->left->type));
         }
 
-        // std::cout<<"left-->"<<*obe->left<<"\n";left->dump();std::cout<<"right-->"<<*obe->right<<"\n";right->dump();
         if(e->is<IR::Add>())    
             return backend->Builder.CreateAdd(left,right);   
 
@@ -282,7 +243,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 icmp1 = left;
                 backend->Builder.CreateCondBr(icmp1, bbNext, bbElse);
             }
-            // MYDEBUG(std::cout<< "SetInsertPoint = land.rhs\n";)
+
             backend->Builder.SetInsertPoint(bbNext);
             BasicBlock* bbParent = bbNext->getSinglePredecessor();
             assert(bbParent != nullptr);
@@ -296,7 +257,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 icmp2 = right;
                 return icmp2;       
             }
-            // MYDEBUG(std::cout<< "SetInsertPoint = land.end\n";)
+
             backend->Builder.SetInsertPoint(bbEnd);
             PHINode* phi = backend->Builder.CreatePHI(icmp1->getType(), 2);
             phi->addIncoming(ConstantInt::getFalse(backend->TheContext), bbParent);
@@ -321,7 +282,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 icmp1 = left;
                 backend->Builder.CreateCondBr(icmp1, bbIf, bbFalse);
             }
-            // MYDEBUG(std::cout<< "SetInsertPoint = land.rhs\n";)
+
             backend->Builder.SetInsertPoint(bbFalse);
             BasicBlock* bbParent = bbFalse->getSinglePredecessor();
             assert(bbParent != nullptr);
@@ -335,7 +296,7 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 icmp2 = right;
                 return icmp2;
             }
-            // MYDEBUG(std::cout<< "SetInsertPoint = land.end\n";)
+
             backend->Builder.SetInsertPoint(bbTrue);
             PHINode* phi = backend->Builder.CreatePHI(icmp1->getType(), 2);
             phi->addIncoming(ConstantInt::getTrue(backend->TheContext), bbParent);
@@ -344,19 +305,9 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
         }
 
         if(e->is<IR::Operation_Relation>()) {
-            // std::cout << "caught as Operation_Relation\n";
-            
             if(obe->right->is<IR::Constant>())
                 right = processExpression(obe->right, bbIf, bbElse);
             
-            // std::cout <<"left -- ";
-            // left->dump();
-            // left->getType()->dump();
-            //std::cout <<"right -- ";
-            // right->dump();
-            // right->getType()->dump();
-            
-
             if(e->is<IR::Equ>())
                 return backend->Builder.CreateICmpEQ(left,right);
 
@@ -379,7 +330,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
     }
 
     if(e->is<IR::Operation_Ternary>())    {
-        // std::cout << "caught in op ternary\n";
         const IR::Operation_Ternary* ote = e->to<IR::Operation_Ternary>();
         Value* e0 = processExpression(ote->e0);
         Value* e1 = processExpression(ote->e1);
@@ -392,7 +342,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
     }
 
     if(e->is<IR::MethodCallExpression>())    {
-        // MYDEBUG(std::cout<<"caught mcs\n";)
         const IR::MethodCallExpression* mce = e->to<IR::MethodCallExpression>();           
 
         auto minst = P4::MethodInstance::resolve(mce, refmap, typemap);
@@ -430,18 +379,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                         // std::cout << "calling processexp from mcs of convert parser stmt: ac=1\n";
                         return createExternFunction(1,mce,extmeth->method->name.name,minst);                      
                     }
-                    // if (arg->is<IR::Member>()) {
-                    //     auto mem = arg->to<IR::Member>();
-                    //     auto baseType = typemap->getType(mem->expr, true);
-                    //     if (baseType->is<IR::Type_Stack>()) {
-                    //         if (mem->member == IR::Type_Stack::next) {
-                    //             type = "stack";
-                    //             j = conv->convert(mem->expr);
-                    //         } else {
-                    //             BUG("%1%: unsupported", mem);
-                    //         }
-                    //     }
-                    // }
 
                     if (argCount == 2) {
                         createExternFunction(2,mce,extmeth->method->name.name,minst);
@@ -498,7 +435,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
         } 
         else if (minst->is<P4::BuiltInMethod>()) {
             auto bi = minst->to<P4::BuiltInMethod>();
-            // std::cout << "name = " << bi->name <<"\n";
             if (bi->name == IR::Type_Header::isValid) {
                 auto val = processExpression(bi->appliedTo,nullptr,nullptr,true);
                 std::vector<Type*> args;
@@ -527,7 +463,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
 
                 BUG_CHECK(mce->arguments->size() == 1, "Expected 1 argument for %1%", mce);
                 
-                // std::cout << "calling processexp from builtin meth of convert parser stmt:1\n";
                 llvmValue = processExpression(mce->arguments->at(0), nullptr, nullptr, true);
                 assert(llvmValue != nullptr && "processExpression should not return null");
                 auto tmp = llvmValue; llvmValue = nullptr;       
@@ -543,8 +478,6 @@ Value* ToIR::processExpression(const IR::Expression* e, BasicBlock* bbIf/*=nullp
                 convertTable(tbl->object->to<IR::P4Table>());            
         }
     }
-    
-    // ::error("Returning nullptr in processExpression");        
     return nullptr;
 }
 
@@ -556,7 +489,6 @@ bool ToIR::preorder(const IR::Declaration_Variable* t) {
 }
 
 bool ToIR::preorder(const IR::AssignmentStatement* t) {
-    // std::cout << "caught in assignment stmt -- " << *t;
     Value* leftValue = processExpression(t->left, nullptr, nullptr, true);
     assert(leftValue != nullptr && "left expression in assignment can't be null");
     Type* llvmType = leftValue->getType();          
@@ -564,7 +496,6 @@ bool ToIR::preorder(const IR::AssignmentStatement* t) {
     if(right != nullptr)    {
         auto eleTy = ((PointerType*)llvmType)->getElementType();
         if(eleTy->isVectorTy())    {
-            // ((PointerType*)llvmType)->getElementType()->dump();
             right = backend->Builder.CreateBitCast(right, ((PointerType*)llvmType)->getElementType());
         }
         else if(eleTy->isIntegerTy() && (eleTy->getIntegerBitWidth() > right->getType()->getIntegerBitWidth())) 
@@ -581,33 +512,24 @@ bool ToIR::preorder(const IR::AssignmentStatement* t) {
  bool ToIR::preorder(const IR::IfStatement* t) {
     BasicBlock* bbIf = BasicBlock::Create(backend->TheContext, "if.then", backend->function);
     BasicBlock* bbElse = BasicBlock::Create(backend->TheContext, "if.else", backend->function);
-    // if(t->condition->is<IR::MethodCallStatement>())  {MYDEBUG(std::cout<<"its true";)}
     Value* cond = processExpression(t->condition, bbIf, bbElse);
-    // MYDEBUG(std::cout << "processed expression for if condition\n";)
     BasicBlock* bbEnd = BasicBlock::Create(backend->TheContext, "if.end", backend->function);
     
     //To handle cases like if(a){//dosomething;}
     //Here 'a' is a PathExpression which would return a LoadInst on processing
     if(isa<LoadInst>(cond)) {
-        // MYDEBUG(std::cout << "Its a load inst\n";)
-        // cond->dump();
-        // cond->getType()->dump();
         cond = backend->Builder.CreateICmpEQ(cond, ConstantInt::get(cond->getType(),1));
-        // MYDEBUG(std::cout << "created a icmp eq\n";)
     }
 
     backend->Builder.CreateCondBr(cond, bbIf, bbElse);
-    // MYDEBUG(std::cout<< "SetInsertPoint = Ifcondition\n";)
     backend->Builder.SetInsertPoint(bbIf);
     visit(t->ifTrue);
     backend->Builder.CreateBr(bbEnd);
 
-    // MYDEBUG(std::cout<< "SetInsertPoint = Else Condition\n";)
     backend->Builder.SetInsertPoint(bbElse);
     visit(t->ifFalse);
     backend->Builder.CreateBr(bbEnd);
     
-    // MYDEBUG(std::cout<< "SetInsertPoint = IfEnd\n";)
     backend->Builder.SetInsertPoint(bbEnd);
     return false;
 }
@@ -615,7 +537,6 @@ bool ToIR::preorder(const IR::AssignmentStatement* t) {
 bool ToIR::preorder(const IR::MethodCallStatement* stat) {
     auto mce = stat->to<IR::MethodCallStatement>()->methodCall;
     llvmValue = processExpression(mce);
-    // assert(llvmValue != nullptr);
     llvmValue = nullptr;
     return false;
 }
@@ -632,9 +553,7 @@ Value* ToIR::createTableFunction(int no, const IR::ConstructorCallExpression* mc
     
     for(int i=0; i<no; i++){
         if(auto inst = mce->arguments->at(i)->to<IR::ListExpression>())   {
-            // std::cout << "caught list exp\n";
             for(auto c : inst->components) {
-                // std::cout << "processing - " << c<<"\n";
                 auto llvmValue = processExpression(c);
                 assert(llvmValue != nullptr && "processExpression should not return null");
                 args.push_back(llvmValue->getType());
@@ -650,15 +569,8 @@ Value* ToIR::createTableFunction(int no, const IR::ConstructorCallExpression* mc
             llvmValue = nullptr;
         } 
     }
-    // for(auto x:args)
-    //     x->dump();
-    // std::cout << "--\n";
-    // for(auto y:param)
-    //     y->getType()->dump();
-    
     FunctionType *FT = FunctionType::get(backend->Builder.getInt8PtrTy(), args, false);
     auto decl = backend->TheModule->getOrInsertFunction(name.c_str(), FT);
-    // Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
     return backend->Builder.CreateCall(decl, param);
 }
 
@@ -672,7 +584,6 @@ void ToIR::convertTableEntries(const IR::P4Table *table, Instruction* apply) {
     SmallVector<Metadata*, 8> priorityMDV;    
     
     for (auto e : entriesList->entries) {
-        // TODO(jafingerhut) - add line/col here?
         auto keyset = e->getKeys();
         int keyIndex = 0;
 
@@ -808,7 +719,6 @@ Value* ToIR::handleTableImplementation(const IR::Property* implementation) {
         SmallVector<Type*,1> args;
         FunctionType *FT = FunctionType::get(backend->Builder.getInt8PtrTy(), args, false);
         auto decl = backend->TheModule->getOrInsertFunction("simplImpl", FT);
-        // Function *decl = Function::Create(FT, Function::ExternalLinkage,  name.c_str(), backend->TheModule.get());
         return backend->Builder.CreateCall(decl);
     }
 
@@ -827,7 +737,6 @@ Value* ToIR::handleTableImplementation(const IR::Property* implementation) {
             return nullptr;
         }
         auto ecc = cc->to<P4::ExternConstructorCall>();
-        // std::cout << "ecc is -- " << *ecc->cce << std::endl;
         auto implementationType = ecc->type;
         auto arguments = ecc->cce->arguments;
         auto add_size = [&arguments](size_t arg_index) {
@@ -846,23 +755,6 @@ Value* ToIR::handleTableImplementation(const IR::Property* implementation) {
             } else {
                 return createTableFunction(3, ecc->cce, "actionSelector");
             }
-            // createTableFunction(3,ecc->cce,extfn->method->name); 
-            // auto input = mkArrayField(selector, "input");
-            // for (auto ke : key->keyElements) {
-            //     auto mt = refmap->getDeclaration(ke->matchType->path, true)
-            //             ->to<IR::Declaration_ID>();
-            //     BUG_CHECK(mt != nullptr, "%1%: could not find declaration", ke->matchType);
-            //     if (mt->name.name != LLBMV2::MatchImplementation::selectorMatchTypeName)
-            //         continue;
-
-            //     auto expr = ke->expression;
-            //     std::cout << "#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
-            //     std::cout << *expr;
-            //     std::cout << "\n#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
-            //     auto jk = conv->convert(expr);
-            //     input->append(jk);
-            //     std::cout << input->toString();
-            // }
         } else if (implementationType->name == LLBMV2::TableImplementation::actionProfileName) {
             return createTableFunction(1, ecc->cce, "actionProfile");            
         } else {
@@ -959,29 +851,22 @@ void ToIR::convertTable(const IR::P4Table* table) {
                 mask = Util::maskFromSlice(h, l);
             }
 
-            // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
             Value *FBloc;
             auto it = backend->str.find(table_match_type.c_str());
-            // std::cout << table_match_type <<"\n";
             if(it != backend->str.end())   {
                 FBloc = backend->str[table_match_type.c_str()];
             }
             else {
-                // std::cout << "not present; adding \n";               
                 Constant *fname = ConstantDataArray::getString(backend->TheContext,table_match_type.c_str(), true);
                 FBloc = new GlobalVariable(*backend->function->getParent(),fname->getType(),true,GlobalValue::PrivateLinkage,fname);
                 backend->str.insert(std::pair<std::string,Value*>(table_match_type.c_str(), FBloc));
             }
             param.push_back(FBloc);
             arg.push_back(FBloc->getType());
-            // std::cout << *expr << "\n";
             auto val = processExpression(expr);
-            // val->dump();
             auto type = val->getType();
             param.push_back(val);
             arg.push_back(type);
-            // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
-            
         }
     }
   
@@ -997,12 +882,9 @@ void ToIR::convertTable(const IR::P4Table* table) {
         auto decl = refmap->getDeclaration(a->getPath(), true);
         BUG_CHECK(decl->is<IR::P4Action>(), "%1%: should be an action name", a);
         auto action = decl->to<IR::P4Action>();
-        // std::cout << "actiFon decl -- " << *action << "###############\n";
         auto name = action->controlPlaneName();
 
         Function* fn = backend->action_function[name];
-        // auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
-        // backend->Builder.CreateStore(fn, alloca);
         arg.push_back(fn->getType());
         param.push_back(fn);
     }
@@ -1060,18 +942,9 @@ void ToIR::convertTable(const IR::P4Table* table) {
         }
 
         Function* fn = backend->action_function[action->controlPlaneName()];
-        // auto alloca = backend->Builder.CreateAlloca(PointerType::get(fn->getFunctionType(),0));
-        // backend->Builder.CreateStore(fn, alloca);
         arg.push_back(fn->getType());
         param.push_back(fn);
-        //add metadata to check const; defact->isConstant 
-        // entry->emplace("action_entry_const", defact->isConstant);
     }
-    // for(auto x:arg) {
-    //     x->dump();
-    // }
-    // for(auto x:param)
-    //     x->getType()->dump();
     FunctionType *FT = FunctionType::get(backend->Builder.getVoidTy(), arg, false);
     Function *decl = Function::Create(FT, Function::ExternalLinkage,  "apply_"+name, backend->TheModule.get());
     auto call = backend->Builder.CreateCall(decl, param);

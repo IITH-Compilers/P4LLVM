@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,14 +20,12 @@ limitations under the License.
 #define _BACKENDS_BMV2_CONTROL_H_
 
 #include "ir/ir.h"
-#include "lib/json.h"
 #include "analyzer.h"
 #include "frontends/p4/coreLibrary.h"
 #include "frontends/p4/typeMap.h"
 #include "frontends/p4/typeChecking/typeChecker.h"
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "midend/convertEnums.h"
-#include "expression.h"
 #include "helpers.h"
 #include "sharedActionSelectorCheck.h"
 #include "simpleSwitch.h"
@@ -40,8 +40,6 @@ class ControlConverter : public Inspector {
     ToIR* toIR;    
     P4::ReferenceMap*      refMap;
     P4::TypeMap*           typeMap;
-    ExpressionConverter*   conv;
-    LLBMV2::JsonObjects*     json;
     
  public:
     bool preorder(const IR::PackageBlock* b) override;
@@ -49,8 +47,7 @@ class ControlConverter : public Inspector {
     bool preorder(const IR::P4Action* a) override;   
 
     explicit ControlConverter(Backend *backend) : backend(backend), toIR(new ToIR(this->backend)),
-        refMap(backend->getRefMap()), typeMap(backend->getTypeMap()),
-        conv(backend->getExpressionConverter()), json(backend->json)
+        refMap(backend->getRefMap()), typeMap(backend->getTypeMap())
     {setName("Control"); }
 };
 

@@ -1,5 +1,7 @@
 /*
-Copyright 2013-present Barefoot Networks, Inc.
+IITH Compilers
+authors: S Venkata Keerthy, D Tharun
+email: {cs17mtech11018, cs15mtech11002}@iith.ac.in
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,14 +16,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "action.h"
 #include "backend.h"
+#include "header.h"
 #include "control.h"
 #include "deparser.h"
 #include "errorcode.h"
-#include "expression.h"
-#include "extern.h"
-#include "globals.h"
 #include "frontends/common/constantFolding.h"
 #include "frontends/p4/evaluator/evaluator.h"
 #include "frontends/p4/methodInstance.h"
@@ -33,22 +32,9 @@ limitations under the License.
 #include "lower.h"
 #include "header.h"
 #include "parser.h"
-#include "JsonObjects.h"
 #include "extractArchInfo.h"
 
 namespace LLBMV2 {
-
-static void log_dump1(const IR::Node *node, const char *head) {
-    if (node) {
-        if (head)
-            std::cout << '+' << std::setw(strlen(head)+6) << std::setfill('-') << "+\n| "
-                      << head << " |\n" << '+' << std::setw(strlen(head)+3) << "+" <<
-                      std::endl << std::setfill(' ');
-        // if (LOGGING(2))
-            // dump(node);
-        // else
-            std::cout << *node << std::endl; }
-}
 
 /**
 This class implements a policy suitable for the SynthesizeActions pass.
@@ -129,78 +115,18 @@ Backend::process(const IR::ToplevelBlock* tlb, BMV2Options& options) {
         evaluator,
         new VisitFunctor([this, evaluator]() { toplevel = evaluator->getToplevelBlock(); }),
     });
-    const IR::P4Program* prog = tlb->getProgram()->apply(*this);
-    // log_dump1(prog,"From backend of bmv2");
-    
+    tlb->getProgram()->apply(*this);    
 }
 
 /// BMV2 Backend that takes the top level block and converts it to a JsonObject
 /// that can be interpreted by the BMv2 simulator.
-void Backend::convert(BMV2Options& options) {
-    jsonTop.emplace("program", options.file);
-    jsonTop.emplace("__meta__", json->meta);
-    jsonTop.emplace("header_types", json->header_types);
-    jsonTop.emplace("headers", json->headers);
-    jsonTop.emplace("header_stacks", json->header_stacks);
-    jsonTop.emplace("header_union_types", json->header_union_types);
-    jsonTop.emplace("header_unions", json->header_unions);
-    jsonTop.emplace("header_union_stacks", json->header_union_stacks);
-    field_lists = mkArrayField(&jsonTop, "field_lists");
-    jsonTop.emplace("errors", json->errors);
-    jsonTop.emplace("enums", json->enums);
-    jsonTop.emplace("parsers", json->parsers);
-    jsonTop.emplace("deparsers", json->deparsers);
-    meter_arrays = mkArrayField(&jsonTop, "meter_arrays");
-    counters = mkArrayField(&jsonTop, "counter_arrays");
-    register_arrays = mkArrayField(&jsonTop, "register_arrays");
-    jsonTop.emplace("calculations", json->calculations);
-    learn_lists = mkArrayField(&jsonTop, "learn_lists");
-    LLBMV2::nextId("learn_lists");
-    jsonTop.emplace("actions", json->actions);
-    jsonTop.emplace("pipelines", json->pipelines);
-    jsonTop.emplace("checksums", json->checksums);
-    force_arith = mkArrayField(&jsonTop, "force_arith");
-    jsonTop.emplace("extern_instances", json->externs);
-    jsonTop.emplace("field_aliases", json->field_aliases);
-
-    json->add_program_info(options.file);
-    json->add_meta_info();
-
-    // convert all enums to json
-    // std::cout << "enums follow:\n";
-    for (const auto &pEnum : *enumMap) {
-        auto name = pEnum.first->getName();
-        // std::cout<< "enum -- "<<name<<" \n";
-        for (const auto &pEntry : *pEnum.second) {
-            json->add_enum(name, pEntry.first, pEntry.second);
-            // std::cout << pEntry.first << "---" << pEntry.second << "\n";
-        }
-    }
-    // std::cout << "----------------enums end-------------------\n";
-
-    if (::errorCount() > 0)
-        return;
-
-    /// generate error types
-    for (const auto &p : errorCodesMap) {
-        auto name = p.first->toString();
-        auto type = p.second;
-        json->add_error(name, type);
-    }
-
-    cstring scalarsName = refMap->newName("scalars");
-
-    // This visitor is used in multiple passes to convert expression to json
-    conv = new ExpressionConverter(this, scalarsName);
+void Backend::convert() {
     PassManager programPasses = {
-        new ConvertHeaders(this, scalarsName)
+        new ConvertHeaders(this)
     };
     // if (psa) tlb->apply(new ConvertExterns());
     PassManager codegen_passes = {
-        // new ConvertHeaders(this, scalarsName),
-        // new ConvertExterns(this),  // only run when target == PSA
         new ConvertParser(this),
-        // new ConvertActions(this),
         new ConvertControl(this),
         new ConvertDeparser(this),
     };
@@ -211,49 +137,12 @@ void Backend::convert(BMV2Options& options) {
     if (main == nullptr)
         return;
 
-    (void)toplevel->apply(ConvertGlobals(this));
     toplevel->getProgram()->apply(programPasses);
     main->apply(codegen_passes);
 }
 
-bool Backend::isStandardMetadataParameter(const IR::Parameter* param) {
-    if (target == Target::SIMPLE) {
-        auto parser = simpleSwitch->getParser(getToplevelBlock());
-        auto params = parser->getApplyParameters();
-        if (params->size() != 4) {
-            simpleSwitch->modelError("%1%: Expected 4 parameter for parser", parser);
-            return false;
-        }
-        if (params->parameters.at(3) == param)
-            return true;
-
-        auto ingress = simpleSwitch->getIngress(getToplevelBlock());
-        params = ingress->getApplyParameters();
-        if (params->size() != 3) {
-            simpleSwitch->modelError("%1%: Expected 3 parameter for ingress", ingress);
-            return false;
-        }
-        if (params->parameters.at(2) == param)
-            return true;
-
-        auto egress = simpleSwitch->getEgress(getToplevelBlock());
-        params = egress->getApplyParameters();
-        if (params->size() != 3) {
-            simpleSwitch->modelError("%1%: Expected 3 parameter for egress", egress);
-            return false;
-        }
-        if (params->parameters.at(2) == param)
-            return true;
-
-        return false;
-    } else {
-        P4C_UNIMPLEMENTED("PSA architecture is not yet implemented");
-    }
-}
-
 llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
     assert(t != nullptr && "Type cannot be empty");
-    // std::cout << "in gct -- " << t->toString() <<"\n";
     if(t->is<IR::Type_Void>()) {
         return llvm::Type::getVoidTy(TheContext);
     }
@@ -290,12 +179,9 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
 
     // Derived Types
     else if(t->is<IR::Type_Name>()) {
-        // std::cout << "in type name "<<*t<<"\n";
         if(defined_type[t->toString()]) {
-            // std::cout << "returning from presence\n";
             return(defined_type[t->toString()]);
         }
-        // std::cout << "element not present\n";
         auto canon = typeMap->getTypeType(t, true);
         defined_type[t->toString()] = getCorrespondingType(canon);
         return defined_type[t->toString()];
@@ -337,16 +223,11 @@ llvm::Type* Backend::getCorrespondingType(const IR::Type *t) {
                 return ArrayType::get(defined_type[st->name], ty->getSize());
             } 
         }
-        // llvm::Type *temp = ArrayType::get(getCorrespondingType(ty->elementType), ty->getSize());    
-        // temp->dump();   
-        // defined_type[t->toString()] = temp;
-        // return temp;
         llvm_unreachable("stack should have been handled as structlike");
         return nullptr;
     }
 
     else if(t->is<IR::Type_Extern>()) {
-        //return metadata
         return nullptr;
     }
 
