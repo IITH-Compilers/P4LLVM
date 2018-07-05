@@ -1,5 +1,5 @@
 # P4 ➡ LLVM
-P4lang is an LLVM front-end for P4, a networking language.
+P4LLVM is an LLVM based compiler for P4, a networking language.
 
 This project is built upon open-source P4 compiler called [p4c](https://github.com/p4lang/p4c).
 The LLVM IR emitter is a pass over p4c IR. We reuse the p4c front-end and translate p4c IR to LLVM IR.
@@ -9,6 +9,7 @@ The LLVM IR emitter is a pass over p4c IR. We reuse the p4c front-end and transl
 Install LLVM from source. We are using LLVM 7.0, not tested on the other versions.
 
 * `git clone https://llvm.org/git/llvm.git`
+* `git checkout 04bf737a84687a17137cc39da1f2e15ee74f1a4c` 
 * `cd llvm && mkdir build && cd build`
 * `cmake ../`
 * `make `
@@ -54,42 +55,20 @@ Dependencies for this repository are same as the p4c compiler. We are listing th
 * `sudo make install`
 * `sudo ldconfig # refresh shared library cache.`
 
-##### Build p4lang in a subdirectory named build.
+##### Build P4LLVM in a subdirectory named build.
 
 * `mkdir build && cd build`
 * `cmake ..`
 * `make -j4`
-* `make -j4 check`
 
 
 
 
 ## Following are the supported constructs of P4 (as of now)
-
-`Bool,
-Bits,
-Structures,
-Header,
-Header union,
-Typedef,
-Select statements,
-States,
-Transition,
-If Statements,
-Assignment statements,
-Constants,
-Arithmetic operations,
-Complementation,
-Negation,
-Boolean operations,
-Logical operations,
-Relational operations,
-Ternary operator,
-Parser block and
-Control block`
+To be updated
 ## How to run?
-Once make is successful, execute `p4c` in build directory to run the code. For example,
+Once make is successful, execute `p4c-llbm2-ss` in build directory to run the code. For example,
 
-`./p4c --target ebpf-v1model-p4org ../p4lang/testdata/p4_16_samples/toy_ebpf.p4`
+`./p4c-llbm2-ss ../p4lang/testdata/p4_16_samples/arith-bmv2.p4`
 
-This would create `toy_ebpf.p4i.ll`, a file with LLVM IR equivalent of `toy_ebpf.p4`. `toy_ebpf.p4i.ll` file would be found under P4’s build directory.
+This would create `arith2-bmv2.p4.ll`, a file with LLVM IR equivalent of `arith2-bmv2.p4` and `arith2-bmv2.p4.ll.json`, a JSON file to target BMV2 compiler. `arith2-bmv2.p4.ll.json` file would be found under P4_16_sample directory.
