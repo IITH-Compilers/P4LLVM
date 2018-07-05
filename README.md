@@ -1,4 +1,4 @@
-# P4 ➡ LLVM
+# P4 ➡ LLVM IR ➡ JSON
 P4LLVM is an LLVM based compiler for P4, a networking language.
 
 This project is built upon open-source P4 compiler called [p4c](https://github.com/p4lang/p4c).
@@ -72,3 +72,9 @@ Once make is successful, execute `p4c-llbm2-ss` in build directory to run the co
 `./p4c-llbm2-ss ../p4lang/testdata/p4_16_samples/arith-bmv2.p4`
 
 This would create `arith2-bmv2.p4.ll`, a file with LLVM IR equivalent of `arith2-bmv2.p4` and `arith2-bmv2.p4.ll.json`, a JSON file to target BMV2 compiler. `arith2-bmv2.p4.ll.json` file would be found under P4_16_sample directory.
+
+## Running with optimization
+While running p4c-llbm2-ss, `--optimize` flag can be used to perform `oz` optimization of LLVM. For example,
+
+`./p4c-llbm2-ss --optimize ../p4lang/testdata/p4_16_samples/arith-bmv2.p4`
+
