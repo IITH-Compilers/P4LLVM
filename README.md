@@ -4,6 +4,19 @@ P4LLVM is an LLVM based compiler for P4, a networking language.
 This project is built upon open-source P4 compiler called [p4c](https://github.com/p4lang/p4c).
 The LLVM IR emitter is a pass over p4c IR. We reuse the p4c front-end and translate p4c IR to LLVM IR.
 
+If you use P4LLVM, please cite the following [paper](https://ieeexplore.ieee.org/document/8526847):
+```
+@inproceedings{2018p4llvm,
+  title={P4LLVM: An LLVM Based P4 Compiler},
+  author={Dangeti, Tharun Kumar and S, Venkata Keerthy and Upadrasta, Ramakrishna},
+  booktitle={2018 IEEE 26th International Conference on Network Protocols (ICNP)},
+  pages={424--429},
+  year={2018},
+  organization={IEEE}
+}
+```
+Supporting materials can be found [here](https://p4.org/assets/P4WE_2018/Dangeti_Kumar.pdf)
+
 ![Image](images/blockdiagram.png)
 ## Getting started
 Install LLVM from source. We are using LLVM 7.0, not tested on the other versions.
@@ -61,11 +74,6 @@ Dependencies for this repository are same as the p4c compiler. We are listing th
 * `cmake ..`
 * `make -j4`
 
-
-
-
-## Following are the supported constructs of P4 (as of now)
-To be updated
 ## How to run?
 Once make is successful, execute `p4c-llbm2-ss` in build directory to run the code. For example,
 
